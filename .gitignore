@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+
+# your avatar (from the old browser version) stays on this computer
+saved/
+
+*.tmp
+.DS_Store
+Thumbs.db
+.claude/settings.local.json

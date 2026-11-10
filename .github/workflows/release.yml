@@ -1,0 +1,86 @@
+# Builds EASY-TUBER for Windows and macOS.
+# Push a tag like v1.0.1 to build both and publish them as a GitHub Release.
+# "Run workflow" on the Actions tab builds them without releasing (download from the run's artifacts).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:win
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/EASY-TUBER-win32-x64 -DestinationPath "EasyTuber-${{ github.ref_name }}-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: EasyTuber-*-windows-x64.zip
+
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:mac
+      - name: Ad-hoc sign and zip
+        # Packaging edits Info.plist, which breaks Electron's own signature; Apple silicon refuses
+        # to run an app whose signature is broken, so sign it again (ad hoc, no Apple account).
+        run: |
+          for arch in arm64 x64; do
+            app="dist/EASY-TUBER-darwin-$arch/EASY-TUBER.app"
+            codesign --force --deep --sign - "$app"
+            codesign --verify --deep --strict "$app"
+            ditto -c -k --sequesterRsrc --keepParent "$app" "EasyTuber-${GITHUB_REF_NAME}-macos-$arch.zip"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: EasyTuber-*-macos-*.zip
+
+  release:
+    needs: [windows, mac]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Download
+
+          | Your computer | File |
+          |---|---|
+          | Windows 10 / 11 | `EasyTuber-…-windows-x64.zip` |
+          | Mac with Apple silicon (M1 and later) | `EasyTuber-…-macos-arm64.zip` |
+          | Mac with an Intel processor | `EasyTuber-…-macos-x64.zip` |
+
+          **Windows:** unzip, open the `EASY-TUBER-win32-x64` folder and run `EASY-TUBER.exe`. Keep the folder together. If SmartScreen says "Windows protected your PC", click **More info → Run anyway** (the app isn't code-signed yet).
+
+          **Mac:** unzip and drag `EASY-TUBER.app` to Applications. The app isn't notarised by Apple yet, so the first time: try to open it, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Allow the microphone when asked.
+
+          See the [README](https://github.com/pjcjonas/EasyTuber#readme) for how to use it.
+          EOF
+          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --title "EasyTuber $GITHUB_REF_NAME" --notes-file notes.md

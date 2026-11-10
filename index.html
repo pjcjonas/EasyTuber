@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EASY-TUBER</title>
+  <link rel="icon" href="build/icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar ui-only">
+    <div class="brand">
+      <img class="wordmark" src="build/logo.jpg" alt="EasyTuber">
+    </div>
+    <div class="seg" role="tablist" aria-label="Mode">
+      <button id="modeEdit" class="seg-btn active" title="Position and scale parts (static pose)">Edit</button>
+      <button id="modeLive" class="seg-btn" title="Watch the rig breathe, blink and talk">Live</button>
+    </div>
+    <div class="top-actions">
+      <button id="btnUndo" class="btn ghost" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="btnRedo" class="btn ghost" title="Redo (Ctrl+Shift+Z)">Redo</button>
+      <span class="sep"></span>
+      <button id="btnSheet" class="btn ghost" title="Crop several parts or frames out of one image">Sprite sheet</button>
+      <span class="sep"></span>
+      <button id="btnImport" class="btn ghost" title="Load a saved .easytuber.json file">Open file</button>
+      <button id="btnExport" class="btn ghost" title="Save your avatar as a .easytuber.json file">Save file</button>
+      <button id="btnReset" class="btn ghost danger" title="Remove all uploads and settings">Reset</button>
+      <span class="sep"></span>
+      <button id="btnStage" class="btn primary" title="Open a clean window to capture in OBS">Open stage window</button>
+      <input id="importInput" type="file" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============ LEFT: PARTS ============ -->
+    <aside class="panel left ui-only">
+      <div id="dropAll" class="dropzone" tabindex="0">
+        <strong>Drop all your layers here</strong>
+        <span>Files are sorted by name, e.g. <code>torso.png</code>, <code>eyes_closed.png</code>, <code>arm_l_upper.png</code></span>
+        <input id="dropAllInput" type="file" accept="image/*" multiple hidden>
+      </div>
+      <div id="partList" class="part-list"></div>
+    </aside>
+
+    <!-- ============ CENTER: STAGE ============ -->
+    <section class="center">
+      <div id="stageWrap" class="stage-wrap">
+        <canvas id="stage"></canvas>
+        <div id="stageHint" class="stage-hint ui-only"></div>
+        <button id="clickToStart" class="click-to-start" hidden>Click to start microphone</button>
+      </div>
+      <div class="meter-row ui-only">
+        <button id="btnMic" class="btn mic-btn" title="Start/stop microphone">🎤 Start mic</button>
+        <div class="meter" id="meter" title="Drag the markers to set when the mouth opens">
+          <div class="meter-fill" id="meterFill"></div>
+          <div class="meter-mark talk" id="markTalk" title="Talk threshold: mouth starts opening (half-open)"><span>talk</span></div>
+          <div class="meter-mark open" id="markOpen" title="Open threshold: mouth fully open"><span>open</span></div>
+        </div>
+        <div class="status-chips">
+          <span class="chip" id="chipMouth">mouth: closed</span>
+          <span class="chip" id="chipEyes">eyes: open</span>
+        </div>
+        <button id="btnTalkTest" class="btn ghost" title="Hold to fake talking (or hold Space)">Hold to test talk</button>
+      </div>
+    </section>
+
+    <!-- ============ RIGHT: INSPECTOR / SETTINGS ============ -->
+    <aside class="panel right ui-only">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="part">Part</button>
+        <button class="tab" data-tab="motion">Motion</button>
+        <button class="tab" data-tab="mic">Mic</button>
+        <button class="tab" data-tab="stageTab">Stage</button>
+      </nav>
+      <div class="tab-body" id="tab-part"></div>
+      <div class="tab-body" id="tab-motion" hidden></div>
+      <div class="tab-body" id="tab-mic" hidden></div>
+      <div class="tab-body" id="tab-stageTab" hidden></div>
+    </aside>
+  </main>
+
+  <div id="intro" class="intro" hidden>
+    <video id="introVideo" src="media/intro.mp4" playsinline preload="auto"></video>
+    <span class="intro-skip">Click or press any key to skip</span>
+  </div>
+  <script src="js/intro.js"></script>
+
+  <div id="toasts" class="toasts"></div>
+  <input id="slotInput" type="file" accept="image/*" multiple hidden>
+
+  <script src="js/util.js"></script>
+  <script src="js/defs.js"></script>
+  <script src="js/placeholder.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/animator.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/sheet.js"></script>
+  <script src="js/panels.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

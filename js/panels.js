@@ -1,0 +1,472 @@
+/* Side panels: part list, part inspector, motion / mic / stage settings. */
+(function (PT) {
+  const { el } = PT;
+
+  const Panels = {
+    syncers: [],
+    get app() { return PT.App; },
+    get project() { return PT.App.project; },
+
+    init() {
+      if (!this.tabsBound) {
+        this.tabsBound = true;
+        document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => this.showTab(b.dataset.tab)));
+      }
+      this.renderPartList();
+      this.renderInspector();
+      this.renderMotion();
+      this.renderMic();
+      this.renderStageTab();
+    },
+
+    showTab(name) {
+      document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+      document.querySelectorAll('.tab-body').forEach((d) => (d.hidden = d.id !== 'tab-' + name));
+    },
+
+    /* ---------- generic controls ---------- */
+    field(label, { min, max, step = 1, get, set, suffix = '', title }) {
+      const range = el('input', { type: 'range', min, max, step });
+      const num = el('input', { type: 'number', step });
+      const sync = () => { const v = get(); range.value = v; if (document.activeElement !== num) num.value = +(+v).toFixed(step < 1 ? 2 : 0); };
+      const apply = (v) => {
+        v = parseFloat(v);
+        if (!isFinite(v)) return;
+        set(v);
+        sync();
+      };
+      range.addEventListener('input', () => apply(range.value));
+      num.addEventListener('change', () => apply(num.value));
+      sync();
+      this.syncers.push(sync);
+      return el('div', { class: 'field', title }, el('label', {}, label + (suffix ? ` (${suffix})` : '')), range, num);
+    },
+
+    check(label, get, set, title) {
+      const input = el('input', { type: 'checkbox' });
+      input.checked = !!get();
+      input.addEventListener('change', () => set(input.checked));
+      this.syncers.push(() => { input.checked = !!get(); });
+      return el('label', { class: 'check', title }, input, label);
+    },
+
+    section(title, ...children) { return el('div', { class: 'section' }, title ? el('h3', {}, title) : null, ...children); },
+    note(text) { return el('p', { class: 'note' }, text); },
+
+    makeDroppable(node, onFiles) {
+      node.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); node.classList.add('over'); });
+      node.addEventListener('dragleave', () => node.classList.remove('over'));
+      node.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation(); node.classList.remove('over');
+        if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files);
+      });
+    },
+
+    pickFiles(target) {
+      const input = document.getElementById('slotInput');
+      input.multiple = !target.state;
+      input.onchange = () => { if (input.files.length) PT.Editor.importFiles(input.files, target); input.value = ''; };
+      input.click();
+    },
+
+    thumbFor(id) {
+      const entry = PT.Assets.primary(id, true);
+      const t = el('div', { class: 'thumb' + (entry && entry.isPlaceholder ? ' placeholder' : '') });
+      if (entry) t.append(PT.Assets.thumb(entry, 80));
+      return t;
+    },
+
+    /* ---------- left: part list ---------- */
+    renderPartList() {
+      const host = document.getElementById('partList');
+      host.innerHTML = '';
+      const app = this.app;
+
+      const rootRow = el('div', { class: 'part-row' + (app.selected === 'root' ? ' selected' : ''), onclick: () => app.select('root') },
+        el('div', { class: 'thumb' }, '🧍'),
+        el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, 'Whole character'), el('div', { class: 'part-sub' }, 'Move / scale everything')));
+      host.append(rootRow);
+
+      let group = null;
+      for (const def of PT.PARTS) {
+        if (def.group !== group) { group = def.group; host.append(el('div', { class: 'group-title' }, group)); }
+        const p = this.project.parts[def.id];
+        const user = PT.Assets.user[def.id] || {};
+        const count = def.states.filter((s) => user[s]).length;
+        const sub = count === 0 ? 'empty, using placeholder'
+          : def.states.length > 1 ? `${count}/${def.states.length} images` : 'uploaded';
+
+        const eye = el('button', {
+          class: 'icon-btn' + (p.visible ? '' : ' off'), title: p.visible ? 'Hide' : 'Show',
+          onclick: (e) => { e.stopPropagation(); PT.Editor.pushUndo(true); p.visible = !p.visible; app.changed({ structure: true }); },
+        }, p.visible ? '👁' : '—');
+
+        const row = el('div', {
+          class: 'part-row' + (app.selected === def.id ? ' selected' : ''),
+          title: 'Click to select. Drop an image here to upload.',
+          onclick: () => app.select(def.id),
+        },
+          this.thumbFor(def.id),
+          el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, def.label), el('div', { class: 'part-sub' + (count ? ' ok' : '') }, sub)),
+          eye);
+        this.makeDroppable(row, (files) => PT.Editor.importFiles(files, { part: def.id }));
+        host.append(row);
+      }
+    },
+
+    /* ---------- right: Part tab ---------- */
+    renderInspector() {
+      this.syncers = this.syncers.filter((s) => !s.inspector);
+      const host = document.getElementById('tab-part');
+      host.innerHTML = '';
+      const app = this.app, id = app.selected;
+      const before = this.syncers.length;
+      const mark = () => { for (let i = before; i < this.syncers.length; i++) this.syncers[i].inspector = true; };
+
+      if (!id) {
+        host.append(
+          el('div', { class: 'title-row' }, el('h2', {}, 'Getting started')),
+          this.section('',
+            el('ol', { class: 'help-list' },
+              el('li', {}, 'Drop all your layer PNGs on the box at the top left, or drop each one on its part.'),
+              el('li', {}, 'Layers exported from the same canvas size line up automatically.'),
+              el('li', {}, 'Click a part on the stage to select it. Drag to move, use the square to scale, the circle to rotate.'),
+              el('li', {}, 'Drag the orange cross to set the joint (shoulder, elbow, chin…). Parts bend and rotate around it.'),
+              el('li', {}, 'Start the mic, then switch to Live to watch it breathe, blink and talk.'),
+            )),
+          this.section('Shortcuts',
+            el('ul', { class: 'help-list' },
+              el('li', {}, el('span', { class: 'kbd' }, 'Space'), ' hold to fake talking'),
+              el('li', {}, el('span', { class: 'kbd' }, 'B'), ' blink'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Arrows'), ' nudge (Shift = 10px)'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Wheel'), ' scale, Shift+wheel rotate'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Alt+drag'), ' move the whole character'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Shift+drag'), ' lock to an axis / snap rotation'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Tab'), ' switch Edit / Live'),
+              el('li', {}, el('span', { class: 'kbd' }, 'Ctrl+Z'), ' undo'),
+            )),
+        );
+        return;
+      }
+
+      if (id === 'root') {
+        const r = this.project.root;
+        const set = (k) => (v) => { PT.Editor.pushUndo(); r[k] = v; app.changed({ transform: true }); };
+        host.append(
+          el('div', { class: 'title-row' }, el('h2', {}, 'Whole character')),
+          this.note('Moves and scales the full rig inside the stage frame. Scaling happens from the bottom center.'),
+          this.section('Transform',
+            this.field('X', { min: -800, max: 800, get: () => r.x, set: set('x') }),
+            this.field('Y', { min: -800, max: 800, get: () => r.y, set: set('y') }),
+            this.field('Scale', { min: 5, max: 300, suffix: '%', get: () => Math.round(r.scale * 100), set: (v) => set('scale')(v / 100) })),
+          el('div', { class: 'row' }, el('button', { class: 'btn', onclick: () => { PT.Editor.pushUndo(true); Object.assign(r, { x: 0, y: 0, scale: 1 }); app.changed({ transform: true }); } }, 'Reset')),
+        );
+        mark();
+        return;
+      }
+
+      const def = PT.PART[id], p = this.project.parts[id];
+      const set = (k) => (v) => { PT.Editor.pushUndo(); p[k] = v; app.changed({ transform: true }); };
+
+      // image slots
+      const slots = el('div', { class: 'slots' + (def.states.length === 1 ? ' single' : '') });
+      for (const st of def.states) {
+        const entry = (PT.Assets.user[id] || {})[st];
+        const previewing = def.states.length > 1 && (app.previewStates[id] || def.states[0]) === st;
+        const slot = el('div', {
+          class: 'slot' + (entry ? ' filled' : '') + (previewing ? ' previewing' : ''),
+          title: entry ? 'Click to preview this state. Drop or double-click to replace.' : 'Click or drop an image',
+          onclick: () => {
+            if (def.states.length > 1) { app.previewStates[id] = st; this.renderInspector(); }
+            if (!entry) this.pickFiles({ part: id, state: st });
+          },
+          ondblclick: () => this.pickFiles({ part: id, state: st }),
+        },
+          el('div', { class: 'slot-img' }, entry ? PT.Assets.thumb(entry, 128) : el('span', { class: 'plus' }, '+')),
+          el('div', { class: 'slot-label' }, def.states.length > 1 ? def.stateLabels[st] : 'Image'),
+          el('button', { class: 'slot-clear', title: 'Remove', onclick: (e) => { e.stopPropagation(); PT.Editor.clearSlot(id, st); } }, '×'));
+        this.makeDroppable(slot, (files) => PT.Editor.importFiles([files[0]], { part: id, state: st }));
+        slots.append(slot);
+      }
+
+      const order = this.project.order, idx = order.indexOf(id);
+      const moveLayer = (dir) => {
+        const j = idx + dir;
+        if (j < 0 || j >= order.length) return;
+        PT.Editor.pushUndo(true);
+        [order[idx], order[j]] = [order[j], order[idx]];
+        app.changed({ structure: true });
+      };
+
+      host.append(
+        el('div', { class: 'title-row' }, el('h2', {}, def.label), el('span', { class: 'part-sub' }, def.group)),
+        this.note(def.hint),
+        this.section('Images', slots,
+          def.states.length > 1 ? this.note('Click a filled slot to preview that state on the stage while editing.') : null,
+          el('div', { class: 'row', style: { marginTop: '8px' } },
+            el('button', {
+              class: 'btn', onclick: () => PT.SheetEditor.forPart(id),
+              title: def.states.length > 1 ? 'Crop all frames for this part out of one image' : 'Crop this part out of a bigger image',
+            }, (this.project.sheets || []).some((s) => s.boxes.some((b) => b.part === id)) ? 'Edit sprite sheet crop…' : 'From sprite sheet…'))),
+        this.frameAdjust(id) || '', // native append() would print a null as the text "null"
+        this.section('Position',
+          this.field('X', { min: -500, max: 1500, get: () => Math.round(p.x), set: set('x'), title: 'Joint position' }),
+          this.field('Y', { min: -500, max: 1500, get: () => Math.round(p.y), set: set('y'), title: 'Joint position' }),
+          this.field('Scale', { min: 1, max: 400, suffix: '%', get: () => Math.round(p.scale * 1000) / 10, set: (v) => set('scale')(Math.max(0.01, v / 100)), step: 0.5 }),
+          this.field('Rotation', { min: -180, max: 180, suffix: '°', get: () => p.rot, set: set('rot'), step: 0.5 }),
+          this.check('Flip horizontally', () => p.flip, (v) => { PT.Editor.pushUndo(true); p.flip = v; app.changed({ transform: true }); }),
+          this.check('Visible', () => p.visible, (v) => { PT.Editor.pushUndo(true); p.visible = v; app.changed({ structure: true }); })),
+        this.section('Joint (pivot)',
+          this.note('The point this part rotates around and attaches to its parent with. You can also drag the orange cross.'),
+          this.field('Pivot X', { min: -200, max: 2400, get: () => Math.round(p.px), set: (v) => this.setPivot(p, v, p.py) }),
+          this.field('Pivot Y', { min: -200, max: 2400, get: () => Math.round(p.py), set: (v) => this.setPivot(p, p.px, v) })),
+        this.section('Layer',
+          el('div', { class: 'row' },
+            el('button', { class: 'btn', onclick: () => moveLayer(-1), disabled: idx === 0 }, '↓ Send back'),
+            el('button', { class: 'btn', onclick: () => moveLayer(1), disabled: idx === order.length - 1 }, '↑ Bring forward')),
+          this.note(`Layer ${idx + 1} of ${order.length} (1 = furthest back).`)),
+        this.section('Tools',
+          el('div', { class: 'row' },
+            el('button', {
+              class: 'btn', title: 'Re-fit the image and recompute the pivot',
+              onclick: () => {
+                PT.Editor.pushUndo(true);
+                const e = PT.Assets.primary(id, false);
+                if (e) PT.Editor.autoPlace(id, e);
+                else { const d = PT.defaultPart(id); Object.assign(p, { x: d.x, y: d.y, rot: d.rot, scale: d.scale, px: d.px, py: d.py, flip: false }); }
+                app.changed({ transform: true });
+              },
+            }, 'Auto-place'),
+            id.startsWith('arm') ? el('button', { class: 'btn', title: 'Copy this arm (both segments) to the other side, mirrored', onclick: () => PT.Editor.mirrorArm(id) }, 'Mirror to other arm') : null)),
+      );
+      mark();
+    },
+
+    sheetList() {
+      const sheets = this.project.sheets || [], app = this.app;
+      const wrap = el('div', {});
+      if (!sheets.length) wrap.append(this.note('None yet. Use "Sprite sheet" in the top bar, or "From sprite sheet…" on a part.'));
+      for (const s of sheets) {
+        const used = s.boxes.filter((b) => b.part).length;
+        wrap.append(el('div', { class: 'sheet-row' },
+          el('span', { class: 'sheet-row-name', title: s.name }, s.name),
+          el('span', { class: 'part-sub' }, `${used} crop${used === 1 ? '' : 's'}`),
+          el('button', { class: 'btn small', onclick: () => PT.SheetEditor.show({ sheet: s }) }, 'Edit'),
+          el('button', {
+            class: 'icon-btn', title: 'Forget this sheet (cropped images stay)',
+            onclick: () => { this.project.sheets = sheets.filter((x) => x !== s); app.changed({ structure: true }); },
+          }, '🗑')));
+      }
+      wrap.append(el('div', { class: 'row', style: { marginTop: '6px' } }, el('button', { class: 'btn', onclick: () => PT.SheetEditor.pick() }, 'Add sprite sheet…')));
+      return wrap;
+    },
+
+    // Per-frame offset/scale for multi-state parts, so frames from a sheet line up with each other
+    frameAdjust(id) {
+      const def = PT.PART[id], p = this.project.parts[id], app = this.app;
+      if (def.states.length < 2 || !PT.Assets.hasUser(id)) return null;
+      const st = app.previewStates[id] || def.states[0];
+      const entry = (PT.Assets.user[id] || {})[st];
+      if (!entry) {
+        return this.section('Frame adjust', this.note(`No "${def.stateLabels[st]}" image yet. Click a filled slot to adjust that frame.`));
+      }
+      p.adj = p.adj || {};
+      const A = () => p.adj[st] || { dx: 0, dy: 0, s: 1 };
+      const set = (k) => (v) => { PT.Editor.pushUndo(); p.adj[st] = { ...A(), [k]: v }; app.changed({ transform: true }); };
+      const lim = Math.round(Math.max(entry.w, entry.h) / 2);
+      return this.section(`Frame adjust: ${def.stateLabels[st]}`,
+        this.note('Nudges and scales only this frame, so it lines up with the others. The first frame is shown faintly underneath (onion skin).'),
+        this.field('Offset X', { min: -lim, max: lim, get: () => Math.round(A().dx * 10) / 10, set: set('dx'), step: 0.5 }),
+        this.field('Offset Y', { min: -lim, max: lim, get: () => Math.round(A().dy * 10) / 10, set: set('dy'), step: 0.5 }),
+        this.field('Scale', { min: 25, max: 300, suffix: '%', get: () => Math.round(A().s * 1000) / 10, set: (v) => set('s')(Math.max(0.05, v / 100)), step: 0.5 }),
+        el('div', { class: 'row' },
+          el('button', { class: 'btn', onclick: () => { PT.Editor.pushUndo(true); delete p.adj[st]; app.changed({ transform: true }); } }, 'Reset this frame'),
+          el('button', {
+            class: 'btn', title: 'Cycle through the frames to check alignment',
+            onclick: () => {
+              const have = def.states.filter((s) => PT.Assets.user[id] && PT.Assets.user[id][s]);
+              app.previewStates[id] = have[(have.indexOf(st) + 1) % have.length];
+              this.renderInspector();
+            },
+          }, 'Next frame →')));
+    },
+
+    setPivot(p, px, py) {
+      // keep the image fixed on screen while the pivot moves
+      PT.Editor.pushUndo();
+      const rest = PT.Renderer.restMatrix(p);
+      const [x, y] = PT.M.apply(rest, px, py);
+      Object.assign(p, { px, py, x, y });
+      this.app.changed({ transform: true });
+    },
+
+    syncInspector() { for (const s of this.syncers) s(); },
+
+    /* ---------- Motion tab ---------- */
+    renderMotion() {
+      const host = document.getElementById('tab-motion');
+      const m = this.project.motion, app = this.app;
+      const f = (label, key, min, max, step, title, suffix) =>
+        this.field(label, { min, max, step, suffix, title, get: () => m[key], set: (v) => { m[key] = v; app.changed({ settings: true }); } });
+      host.innerHTML = '';
+      host.append(
+        this.note('All motion is built in. These sliders only change how strong it is. Switch to Live to see it.'),
+        this.section('Breathing',
+          f('Speed', 'breathSpeed', 1.5, 9, 0.1, 'Seconds per breath (higher = slower)', 's'),
+          f('Amount', 'breathAmount', 0, 3, 0.05),
+          f('Idle sway', 'idleSway', 0, 3, 0.05, 'Gentle head and body drift while idle')),
+        this.section('Blinking',
+          f('Every', 'blinkInterval', 1, 12, 0.1, 'Average seconds between blinks', 's'),
+          f('Double blink', 'doubleBlink', 0, 0.8, 0.01, 'Chance of a double blink'),
+          el('div', { class: 'row' }, el('button', { class: 'btn', onclick: () => app.animator.blink() }, 'Blink now (B)'))),
+        this.section('Talking',
+          f('Head bob', 'headBob', 0, 3, 0.05, 'Head hops on each syllable'),
+          f('Head tilt', 'headTilt', 0, 3, 0.05, 'Head rocks side to side while talking'),
+          f('Body bounce', 'bodyBounce', 0, 3, 0.05),
+          f('Gestures', 'gesture', 0, 3, 0.05, 'Arms move when you talk')),
+        this.section('Secondary motion',
+          f('Arm sway', 'armSway', 0, 3, 0.05, 'Idle arm movement'),
+          f('Hair physics', 'hairPhysics', 0, 3, 0.05, 'How much the hair swings after the head moves')),
+        el('div', { class: 'row' }, el('button', {
+          class: 'btn', onclick: () => { Object.assign(m, PT.DEFAULT_MOTION); this.syncInspector(); app.changed({ settings: true }); },
+        }, 'Reset motion to defaults')),
+      );
+    },
+
+    /* ---------- Mic tab ---------- */
+    renderMic() {
+      const host = document.getElementById('tab-mic');
+      const mic = this.project.mic, app = this.app;
+      const f = (label, key, min, max, step, title, suffix) =>
+        this.field(label, { min, max, step, suffix, title, get: () => mic[key], set: (v) => { mic[key] = v; app.changed({ settings: true }); } });
+
+      const select = el('select', { id: 'micSelect' }, el('option', { value: '' }, 'Default microphone'));
+      select.addEventListener('change', async () => {
+        mic.deviceId = select.value; app.changed({ settings: true });
+        if (PT.Audio.running) app.startMic();
+      });
+      this.micSelect = select;
+
+      const tuneBtn = el('button', { class: 'btn', onclick: () => this.tune(tuneBtn) }, 'Tune to my voice');
+
+      host.innerHTML = '';
+      host.append(
+        this.section('Input', select,
+          el('div', { class: 'row', style: { marginTop: '8px' } },
+            el('button', { class: 'btn', id: 'btnMic2', onclick: () => app.toggleMic() }, 'Start / stop mic'), tuneBtn)),
+        this.section('Sensitivity',
+          f('Sensitivity', 'sensitivity', 0, 100, 1, 'Boosts or lowers the input level'),
+          f('Talk at', 'talk', 0.02, 0.95, 0.01, 'Level where the mouth starts to open (half)'),
+          f('Open at', 'open', 0.05, 1, 0.01, 'Level where the mouth fully opens'),
+          f('Hold', 'hold', 0, 600, 10, 'How long the mouth stays open after you stop. Longer = calmer', 'ms'),
+          this.note('You can also drag the white and purple markers on the meter under the stage.')),
+        this.section('Tips', el('ul', { class: 'help-list' },
+          el('li', {}, 'Talk normally and watch the meter. The bar should pass "talk" on every word and "open" on louder syllables.'),
+          el('li', {}, 'If the mouth flaps on background noise, raise "Talk at" or lower Sensitivity.'),
+          el('li', {}, 'No "Half" mouth image? The rig uses the open mouth for both.'))),
+      );
+      this.refreshDevices();
+    },
+
+    async refreshDevices() {
+      const sel = this.micSelect; if (!sel) return;
+      const list = await PT.Audio.devices();
+      const cur = this.project.mic.deviceId;
+      sel.innerHTML = '';
+      sel.append(el('option', { value: '' }, 'Default microphone'));
+      list.forEach((d, i) => { if (d.deviceId && d.deviceId !== 'default') sel.append(el('option', { value: d.deviceId }, d.label || `Microphone ${i + 1}`)); });
+      sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+    },
+
+    // Measure 1.5 s of silence, then 3 s of talking, and set thresholds from that
+    async tune(btn) {
+      const app = this.app, mic = this.project.mic;
+      if (!PT.Audio.running) { await app.startMic(); if (!PT.Audio.running) return; }
+      const sample = (ms) => new Promise((res) => {
+        const vals = [], t0 = performance.now();
+        const tick = () => { vals.push(app.level); if (performance.now() - t0 < ms) requestAnimationFrame(tick); else res(vals); };
+        tick();
+      });
+      btn.disabled = true;
+      btn.textContent = 'Stay quiet…';
+      const quiet = await sample(1500);
+      btn.textContent = 'Now talk normally…';
+      const talk = await sample(3000);
+      btn.disabled = false; btn.textContent = 'Tune to my voice';
+      const sorted = (a) => a.slice().sort((x, y) => x - y);
+      const q = sorted(quiet), t = sorted(talk);
+      const noise = q[Math.floor(q.length * 0.95)] || 0;
+      const speech = t[Math.floor(t.length * 0.7)] || 0;
+      if (speech - noise < 0.08) { PT.toast('Couldn\'t hear much difference between quiet and talking. Try raising Sensitivity and tune again.', 'warn', 6000); return; }
+      mic.talk = PT.clamp(noise + (speech - noise) * 0.3, 0.03, 0.9);
+      mic.open = PT.clamp(noise + (speech - noise) * 0.85, mic.talk + 0.05, 0.98);
+      this.syncInspector();
+      app.changed({ settings: true });
+      PT.toast('Mic tuned to your voice.');
+    },
+
+    /* ---------- Stage tab ---------- */
+    obsUrl() {
+      const url = location.origin + '/?stage=1';
+      const input = el('input', { class: 'obs-url', value: url, readonly: true, onfocus: (e) => e.target.select() });
+      const copy = el('button', { class: 'btn', onclick: async () => {
+        try { await navigator.clipboard.writeText(url); } catch (e) { input.select(); document.execCommand('copy'); }
+        PT.toast('OBS URL copied');
+      } }, 'Copy');
+      return el('div', { class: 'obs-row' }, input, copy);
+    },
+
+    renderStageTab() {
+      const host = document.getElementById('tab-stageTab');
+      const st = this.project.stage, app = this.app;
+      this.syncers = this.syncers.filter((s) => !s.stageTab);
+      const before = this.syncers.length;
+
+      const opts = [['transparent', 'Transparent', 'checker'], ['green', 'Green screen', '#00ff00'], ['blue', 'Blue screen', '#0000ff'], ['magenta', 'Magenta', '#ff00ff']];
+      const sw = el('div', { class: 'swatches' });
+      for (const [k, label, color] of opts) {
+        sw.append(el('button', {
+          class: 'swatch' + (color === 'checker' ? ' checker' : '') + (st.bg === k ? ' active' : ''), title: label,
+          style: color === 'checker' ? null : { background: color },
+          onclick: () => { st.bg = k; app.changed({ settings: true }); this.renderStageTab(); },
+        }));
+      }
+      const colorIn = el('input', { type: 'color', value: st.color, title: 'Custom color', class: 'swatch' + (st.bg === 'custom' ? ' active' : ''), style: { padding: 0 } });
+      colorIn.addEventListener('input', () => { st.bg = 'custom'; st.color = colorIn.value; app.changed({ settings: true }); });
+      colorIn.addEventListener('change', () => this.renderStageTab());
+      sw.append(colorIn);
+
+      const list = el('ol', { class: 'order-list' });
+      const order = this.project.order;
+      for (let i = order.length - 1; i >= 0; i--) {
+        const id = order[i], def = PT.PART[id];
+        const mv = (dir) => { const j = i + dir; if (j < 0 || j >= order.length) return; PT.Editor.pushUndo(true); [order[i], order[j]] = [order[j], order[i]]; app.changed({ structure: true }); };
+        list.append(el('li', { class: app.selected === id ? 'selected' : '' },
+          el('span', { onclick: () => app.select(id), style: { cursor: 'pointer' } }, (def.group.includes('arm') ? def.group.replace(' arm', '') + ' ' : '') + def.label),
+          el('button', { class: 'icon-btn', title: 'Bring forward', onclick: () => mv(1), disabled: i === order.length - 1 }, '↑'),
+          el('button', { class: 'icon-btn', title: 'Send back', onclick: () => mv(-1), disabled: i === 0 }, '↓')));
+      }
+
+      host.innerHTML = '';
+      host.append(
+        this.section('Background', sw, this.note('Used by the stage window. Transparent shows a checkerboard here.')),
+        this.section('Editor',
+          this.check('Show placeholder art for empty parts', () => st.placeholders, (v) => { st.placeholders = v; app.changed({ structure: true }); }),
+          this.check('Show joints and bones', () => st.skeleton, (v) => { st.skeleton = v; app.changed({ settings: true }); }),
+          this.check('Dragging a part moves the parts attached to it', () => st.moveChildren, (v) => { st.moveChildren = v; app.changed({ settings: true }); },
+            'e.g. moving the face also moves eyes, mouth and hair'),
+          this.check('Onion skin when lining up eye / mouth frames', () => st.onion, (v) => { st.onion = v; app.changed({ settings: true }); })),
+        this.section('Sprite sheets', this.sheetList()),
+        this.section('Draw order (top = front)', list),
+        this.section('Streaming with OBS', this.obsUrl(), el('ol', { class: 'help-list' },
+          el('li', {}, 'In OBS: + → Browser. Paste the URL above, width 1000, height 1000.'),
+          el('li', {}, 'Leave Background on Transparent: no chroma key needed.'),
+          el('li', {}, 'Keep EASY-TUBER open with the mic on. It can be minimized.')),
+          this.note('Or use Window Capture: pick Green screen, click "Open stage window" and capture "EASY-TUBER Stage" with a Chroma Key filter.')),
+      );
+      for (let i = before; i < this.syncers.length; i++) this.syncers[i].stageTab = true;
+    },
+  };
+
+  PT.Panels = Panels;
+})(window.PT);
