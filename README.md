@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/pjcjonas/EasyTuber/releases/latest"><b>Download for Windows or Mac</b></a> ·
-  <a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.0.0/EasyTuber-tutorial.mp4"><b>Watch the video tutorial</b></a>
+  <a href="#video-tutorial"><b>Watch the video tutorial</b></a>
 </p>
 
 # EASY-TUBER
@@ -12,6 +12,12 @@
 A desktop PNGTuber maker with a built-in skeleton. You upload the body parts of your character, line them up once, and your avatar **breathes, blinks, talks to your microphone, bobs its head, swings its hair and gestures with its arms**. All the motion is pre-configured; you only choose how strong it is. Then you put it in OBS with a transparent background.
 
 Nothing is uploaded anywhere. Your microphone and your art stay on your computer.
+
+## Video tutorial
+
+A narrated walkthrough (3:54): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, and streaming in OBS. Click the picture to download and play it.
+
+<a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.0.0/EasyTuber-tutorial.mp4"><img src="docs/tutorial-thumbnail.jpg" alt="Watch the EasyTuber video tutorial (3:54)" width="720"></a>
 
 ![The EASY-TUBER editor](docs/screenshots/editor.png)
 
@@ -340,4 +346,5 @@ js/storage.js       avatar file + browser storage + messaging to the stage page
 js/placeholder.js   built-in placeholder character
 js/app.js           boot + main loop
 docs/screenshots/   the pictures in this README
+docs/tutorial-thumbnail.jpg  the video tutorial's preview picture
 ```
