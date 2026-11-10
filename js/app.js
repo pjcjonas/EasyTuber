@@ -44,17 +44,30 @@
       document.title = 'EASY-TUBER Stage';
       this.mode = 'live';
       this.inOBS = !!window.obsstudio;
+      // an avatar switch: the editor says "switch-out", then saves the new avatar
+      let switching = false;
       const reload = PT.debounce(async () => {
         const p = (await PT.Storage.load()).project;
         if (!p) return;
         const np = PT.normalizeProject(p);
+        // the image cache is shared: let the old avatar finish falling before loading the new art
+        if (switching) while (PT.Transition.falling) await new Promise((r) => setTimeout(r, 30));
         await PT.Assets.loadProject(np);
         this.project = np;
+        if (switching) {
+          switching = false;
+          // (unless the 6 s safety net already brought the parts back)
+          if (PT.Transition.phase === 'out' || PT.Transition.phase === 'hidden') PT.Transition.in();
+        }
       }, 150);
       PT.Storage.onMessage((msg) => {
         if (msg.type === 'project-saved') reload();
         else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.t = performance.now(); }
         else if (msg.type === 'blink') this.animator.blink();
+        else if (msg.type === 'switch-out') {
+          if (msg.test) PT.Transition.play();
+          else { switching = true; PT.Transition.out(); }
+        }
       });
       const btn = $('clickToStart');
       btn.addEventListener('click', async () => {
@@ -108,7 +121,7 @@
         } catch (err) { PT.toast('Could not open file: ' + err.message, 'error'); }
       };
       $('btnReset').onclick = async () => {
-        if (!confirm('Remove all uploaded images and reset every setting?')) return;
+        if (!confirm('Remove all avatars and uploaded images, and reset every setting?')) return;
         await this.loadProject(PT.defaultProject());
         PT.toast('Reset to the placeholder character.');
       };
@@ -140,6 +153,10 @@
       this.initMeter();
       this.initKeys();
       this.setMode('edit');
+
+      // global hotkeys: registered by the desktop app, delivered here even while you're in a game
+      PT.Storage.onHotkey((action) => PT.Avatars.handle(action));
+      PT.Avatars.register();
       if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => PT.Panels.refreshDevices());
       }
@@ -156,6 +173,18 @@
       PT.Panels.syncers = [];
       PT.Panels.init();
       this.save();
+      PT.Avatars.register();
+    },
+
+    // after an avatar switch put a different look on screen
+    afterLookChange() {
+      this.selected = null;
+      this.previewStates = { eyes: 'open', mouth: 'closed' };
+      PT.Editor.resetHistory();
+      PT.Panels.renderPartList();
+      PT.Panels.renderInspector();
+      PT.Panels.renderStageTab();
+      PT.Panels.renderAvatars();
     },
 
     setMode(mode) {
@@ -300,11 +329,13 @@
       const pose = R.computePose(p, editing ? null : anim.deltas);
       this.lastPose = pose;
       R.clear(p, editing);
+      const switching = PT.Transition.active;
       R.drawRig(p, pose, editing ? this.previewStates : anim.states, {
         dimPlaceholders: editing,
         onionPart: editing && p.stage.onion ? this.selected : null,
+        fx: switching ? (id, t) => PT.Transition.fx(id, t) : null,
       });
-      if (editing) PT.Editor.drawOverlay(pose);
+      if (editing && !switching) PT.Editor.drawOverlay(pose);
       if (!this.stageMode) this.updateMeter(anim);
 
       requestAnimationFrame((tt) => this.frame(tt));

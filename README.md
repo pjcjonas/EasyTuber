@@ -29,9 +29,9 @@ https://github.com/user-attachments/assets/8711d20d-2a99-4d6d-908e-319c25ee7503
 
 ## Video tutorial
 
-A narrated walkthrough (3:54): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, and streaming in OBS. Click the picture to download and play it.
+A narrated walkthrough (4:31): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, switching avatars with hotkeys, and streaming in OBS. Click the picture to download and play it.
 
-<a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.0.0/EasyTuber-tutorial.mp4"><img src="docs/tutorial-thumbnail.jpg" alt="Watch the EasyTuber video tutorial (3:54)" width="720"></a>
+<a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.1.0/EasyTuber-tutorial.mp4"><img src="docs/tutorial-thumbnail.jpg" alt="Watch the EasyTuber video tutorial (4:31)" width="720"></a>
 
 ![The EASY-TUBER editor](docs/screenshots/editor.png)
 
@@ -49,11 +49,12 @@ A narrated walkthrough (3:54): uploading your art, lining up the rig, eyes and m
 8. [Set up your microphone](#8-set-up-your-microphone)
 9. [Tune the motion](#9-tune-the-motion)
 10. [Watch it live](#10-watch-it-live)
-11. [Stream it with OBS](#11-stream-it-with-obs)
-12. [Save, back up and move your avatar](#12-save-back-up-and-move-your-avatar)
-13. [Shortcuts](#13-shortcuts)
-14. [Troubleshooting](#14-troubleshooting)
-15. [For developers](#15-for-developers)
+11. [Switch avatars with hotkeys](#11-switch-avatars-with-hotkeys)
+12. [Stream it with OBS](#12-stream-it-with-obs)
+13. [Save, back up and move your avatar](#13-save-back-up-and-move-your-avatar)
+14. [Shortcuts](#14-shortcuts)
+15. [Troubleshooting](#15-troubleshooting)
+16. [For developers](#16-for-developers)
 
 ---
 
@@ -95,7 +96,7 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 | **Left panel** | The drop box for all your layers, and the list of body parts. Click a part to select it; the eye icon hides or shows it |
 | **Centre** | The stage. The checkerboard square is the area OBS captures |
 | **Bottom bar** | **Start mic**, the level meter with its **talk** and **open** markers, the mouth/eyes status, and **Hold to test talk** |
-| **Right panel** | Four tabs: **Part** (the selected part), **Motion**, **Mic** and **Stage** |
+| **Right panel** | Five tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage** and **Avatars** |
 
 Until you upload your own art, every part shows a built-in placeholder character, so you can see the motion straight away.
 
@@ -239,7 +240,28 @@ Click **Live** in the top bar (or press **Tab**). The skeleton disappears and th
 
 ---
 
-## 11. Stream it with OBS
+## 11. Switch avatars with hotkeys
+
+Keep several avatars (outfits, moods, characters) and switch between them with keys on your keyboard, **even while you're in a game**. When you switch, the parts drop off the screen and the new avatar climbs back in, in the editor and in OBS.
+
+![Switching avatars: the parts fall off and the new avatar climbs in](docs/screenshots/avatar-switch.gif)
+
+Open the **Avatars** tab:
+
+![The Avatars tab](docs/screenshots/avatars-tab.png)
+
+* **+ New avatar** starts a new one from the placeholder. **Duplicate** copies what's on screen, which is the quick way to make an outfit change or a different expression. **Add from file…** adds the avatars from a saved `.easytuber.json` (so avatars you made separately can live together).
+* **Show** puts an avatar on screen. Rename an avatar by typing in its name box. Everything you edit (images, positions, joints, draw order) belongs to the avatar on screen. Motion, mic and stage settings are shared by all of them.
+* **Set key**, then press the combination you want, such as **Ctrl+Alt+1**. Esc cancels; Backspace removes the key. A key needs Ctrl, Alt or Shift with it, except F-keys and numpad keys, which can be used alone. That's so your normal typing keeps working everywhere.
+* **Random mix** builds a new look from your avatars: each part comes from a random avatar (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as an avatar. Mixing works best when your avatars were drawn on the same canvas, in the same pose.
+* **Next avatar** steps through your avatars in order with one key.
+* **Switch animation** turns the drop-out / climb-in effect on or off. **Test the animation** plays it here and in OBS.
+
+Hotkeys work as long as EASY-TUBER is running, even minimised. While it runs, the keys you bind don't reach other programs, so pick combinations you don't use elsewhere. If another program already uses a combination, it shows in red: pick a different one.
+
+---
+
+## 12. Stream it with OBS
 
 EASY-TUBER serves your avatar on a local web address for OBS: `http://localhost:8777/?stage=1`. The **Stage** tab shows this address with a **Copy** button.
 
@@ -265,7 +287,7 @@ The **Stage** tab also has the editor options (placeholder art, joints and bones
 
 ---
 
-## 12. Save, back up and move your avatar
+## 13. Save, back up and move your avatar
 
 * **Your avatar saves itself** every time you change something, to:
   * Windows: `%APPDATA%\EASY-TUBER\avatar.easytuber.json`
@@ -278,7 +300,7 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 
 ---
 
-## 13. Shortcuts
+## 14. Shortcuts
 
 | Key | Action |
 |---|---|
@@ -292,12 +314,13 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 | **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / redo |
 | **F5** | Reload |
 | **F12** | Developer tools |
+| *Your avatar hotkeys* | Switch avatar, next avatar, random mix (set in the Avatars tab; work in any program) |
 
 On a Mac, use **Cmd** where this says Ctrl.
 
 ---
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -305,12 +328,13 @@ On a Mac, use **Cmd** where this says Ctrl.
 | The mouth flaps on noise | Raise **Talk at** or lower **Sensitivity**, or use **Tune to my voice**. |
 | The avatar doesn't move in OBS | Keep EASY-TUBER open with the mic on. Check the Browser Source address matches the one in the Stage tab. |
 | Gaps open between parts when they move | Move the joint (orange cross) to where the part really bends, and draw the part a little bigger under its neighbour. |
+| An avatar hotkey does nothing | Check it isn't red in the Avatars tab (red means another program has it). Keep EASY-TUBER running. On a Mac, some combinations are reserved by macOS; try another. |
 | "Windows protected your PC" | Click **More info → Run anyway**. |
 | The Mac says the app can't be opened | **System Settings → Privacy & Security → Open Anyway**. If it says the app is damaged, run `xattr -cr /Applications/EASY-TUBER.app` in Terminal and open it again. |
 
 ---
 
-## 15. For developers
+## 16. For developers
 
 **Run from source** (needs [Node.js](https://nodejs.org) 22 or later):
 
@@ -320,6 +344,8 @@ npm start
 ```
 
 On Windows you can also double-click `start.bat`.
+
+**Tests:** `npm test`
 
 **Build the app**
 
@@ -350,6 +376,8 @@ css/style.css
 js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, default layout and settings, filename routing
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
+js/avatars.js       avatar layouts, global hotkeys, random mix, switching
+js/transition.js    the drop-out / climb-in switch animation
 js/renderer.js      skeleton pose math + drawing
 js/editor.js        canvas editing, uploads/auto-alignment, mirroring, undo
 js/sheet.js         sprite sheet cropper
@@ -360,5 +388,6 @@ js/storage.js       avatar file + browser storage + messaging to the stage page
 js/placeholder.js   built-in placeholder character
 js/app.js           boot + main loop
 docs/screenshots/   the pictures in this README
+tests/              npm test (server and avatar logic)
 docs/tutorial-thumbnail.jpg  the video tutorial's preview picture
 ```

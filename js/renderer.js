@@ -111,6 +111,8 @@
     drawRig(project, pose, states, opts = {}) {
       const { ctx } = this;
       const usePH = project.stage.placeholders;
+      const k = this.view()[0];   // stage units -> canvas pixels
+      const now = performance.now();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       for (const id of project.order) {
@@ -120,8 +122,10 @@
         const want = def.states.length > 1 ? (states[id] || def.states[0]) : 'main';
         const r = PT.Assets.resolve(id, want, usePH);
         if (!r) continue;
+        const fx = opts.fx ? opts.fx(id, now) : null;   // avatar-switch animation
+        if (fx && fx.hide) continue;
         // onion skin: while lining up a frame, show the part's first frame faintly underneath
-        if (opts.onionPart === id && !r.entry.isPlaceholder) {
+        if (!fx && opts.onionPart === id && !r.entry.isPlaceholder) {
           const refState = def.states.find((s) => s !== r.state && PT.Assets.user[id] && PT.Assets.user[id][s]);
           if (refState) {
             const ref = PT.Assets.user[id][refState];
@@ -131,7 +135,12 @@
             ctx.drawImage(ref.source, 0, 0, ref.w, ref.h);
           }
         }
-        const m = this.entryMatrix(pose, id, r.entry, r.squash, usePH, p.adj && p.adj[r.state]);
+        let m = this.entryMatrix(pose, id, r.entry, r.squash, usePH, p.adj && p.adj[r.state]);
+        if (fx) {
+          // move and spin the part around its own centre, in screen space
+          const bb = r.entry.bbox, [cx, cy] = M.apply(m, bb.x + bb.w / 2, bb.y + bb.h / 2);
+          m = M.chain(M.t(cx + fx.dx * k, cy + fx.dy * k), M.r(fx.rot), M.t(-cx, -cy), m);
+        }
         ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
         ctx.globalAlpha = r.entry.isPlaceholder && opts.dimPlaceholders ? 0.55 : 1;
         ctx.drawImage(r.entry.source, 0, 0, r.entry.w, r.entry.h);

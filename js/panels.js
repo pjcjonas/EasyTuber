@@ -17,6 +17,7 @@
       this.renderMotion();
       this.renderMic();
       this.renderStageTab();
+      this.renderAvatars();
     },
 
     showTab(name) {
@@ -465,6 +466,134 @@
           this.note('Or use Window Capture: pick Green screen, click "Open stage window" and capture "EASY-TUBER Stage" with a Chroma Key filter.')),
       );
       for (let i = before; i < this.syncers.length; i++) this.syncers[i].stageTab = true;
+    },
+
+    /* ---------- Avatars tab ---------- */
+    // listen for the next key combination; onKey(accelerator) or onKey('') to clear
+    captureKey(btn, onKey) {
+      if (this.capture) this.capture.cancel();
+      const A = PT.Avatars;
+      btn.textContent = 'Press keys…';
+      btn.classList.add('capturing');
+      A.pause();   // or pressing a key that's already bound would switch avatars instead
+      let finished = false;
+      const done = async (acc) => {
+        if (finished) return;
+        finished = true;
+        window.removeEventListener('keydown', onDown, true);
+        window.removeEventListener('blur', onBlur);
+        this.capture = null;
+        if (acc === undefined) await A.register();
+        else await onKey(acc);
+      };
+      const onDown = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const plain = !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
+        if (e.key === 'Escape') return done();
+        if (plain && (e.key === 'Backspace' || e.key === 'Delete')) return done('');
+        const r = A.acceleratorFromEvent(e);
+        if (!r) return;   // only modifiers so far
+        if (r.error) { PT.toast(r.error, 'warn', 6000); return; }
+        done(r.accelerator);
+      };
+      const onBlur = () => done();
+      window.addEventListener('keydown', onDown, true);
+      window.addEventListener('blur', onBlur);
+      this.capture = { cancel: () => done() };
+    },
+
+    hotkeyRow(target, current) {
+      const A = PT.Avatars;
+      const bad = current && A.supported && A.status[current] === false;
+      const cap = el('span', {
+        class: 'keycap' + (current ? '' : ' none') + (bad ? ' bad' : ''),
+        title: bad ? 'Another program is already using this key combination. Pick a different one.' : '',
+      }, current ? A.prettyKey(current) : 'No hotkey');
+      const set = el('button', { class: 'btn small', title: 'Press the key combination to use. Esc cancels, Backspace removes it.' }, current ? 'Change' : 'Set key');
+      set.onclick = () => this.captureKey(set, async (acc) => {
+        if (acc && A.keyInUse(acc, target)) {
+          PT.toast(`${A.prettyKey(acc)} is already used for another avatar or action.`, 'warn', 5000);
+          await A.register();
+          return;
+        }
+        await A.setHotkey(target, acc);
+        if (acc) PT.toast(`Hotkey set: ${A.prettyKey(acc)}`);
+      });
+      const clear = current ? el('button', { class: 'icon-btn', title: 'Remove hotkey', onclick: () => A.setHotkey(target, '') }, '✕') : null;
+      return el('div', { class: 'key-row' }, cap, set, clear);
+    },
+
+    renderAvatars() {
+      const host = document.getElementById('tab-avatars');
+      if (!host || this.app.stageMode) return;
+      if (this.capture) this.capture.cancel();
+      const A = PT.Avatars, p = this.project, app = this.app;
+
+      const rows = el('div', { class: 'avatar-list' });
+      for (const a of p.avatars) {
+        const on = a.id === p.activeAvatar;
+        const name = el('input', { class: 'av-name', value: a.name, maxlength: 60, title: 'Avatar name' });
+        name.addEventListener('change', () => A.rename(a, name.value));
+        name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
+        rows.append(el('div', { class: 'avatar-row' + (on ? ' active' : '') },
+          el('div', { class: 'av-top' },
+            el('span', { class: 'av-dot', title: on ? 'On screen now' : '' }),
+            name,
+            on ? el('span', { class: 'av-badge' }, 'On screen')
+              : el('button', { class: 'btn small', title: 'Switch to this avatar', onclick: () => A.switchTo(a.id) }, 'Show')),
+          el('div', { class: 'av-bottom' },
+            this.hotkeyRow(a, a.hotkey),
+            el('button', {
+              class: 'icon-btn', title: 'Delete this avatar', disabled: p.avatars.length < 2,
+              onclick: () => { if (confirm(`Delete "${a.name}" and its images?`)) A.remove(a); },
+            }, '🗑'))));
+      }
+
+      const fileIn = el('input', { type: 'file', accept: '.json,application/json', hidden: true });
+      fileIn.addEventListener('change', async () => {
+        const f = fileIn.files[0]; fileIn.value = '';
+        if (!f) return;
+        try { await A.importFile(f); await A.register(); } catch (e) { PT.toast('Could not read that file: ' + e.message, 'error'); }
+      });
+
+      const random = p.activeAvatar === A.RANDOM;
+      const anyBad = A.supported && Object.values(A.status).some((ok) => ok === false);
+
+      host.innerHTML = '';
+      host.append(
+        this.section('Your avatars',
+          random ? el('p', { class: 'note' }, '🎲 A random mix is on screen. Keep it as an avatar, or switch to one below.') : null,
+          rows,
+          el('div', { class: 'row' },
+            el('button', { class: 'btn', title: 'Start a new avatar from the placeholder', onclick: () => A.addBlank() }, '+ New avatar'),
+            el('button', { class: 'btn', title: 'Copy what is on screen into a new avatar, e.g. for an outfit change', onclick: () => A.duplicate() }, 'Duplicate')),
+          el('div', { class: 'row', style: { marginTop: '6px' } },
+            el('button', { class: 'btn', title: 'Add the avatars from a saved .easytuber.json file', onclick: () => fileIn.click() }, 'Add from file…'), fileIn),
+          this.note('Each avatar has its own images, positions and draw order. Motion, mic and stage settings are shared.')),
+        this.section('Random mix',
+          this.note('Builds a new look from your avatars: each part (both pieces of an arm together) comes from a random avatar. Works best when your avatars were drawn on the same canvas.'),
+          this.hotkeyRow('random', p.hotkeys.random),
+          el('div', { class: 'row', style: { marginTop: '8px' } },
+            el('button', { class: 'btn', onclick: () => A.switchTo(A.RANDOM) }, '🎲 Mix now'),
+            random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new avatar', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
+        this.section('Next avatar',
+          this.note('Steps through your avatars in order.'),
+          this.hotkeyRow('next', p.hotkeys.next)),
+        this.section('Switch animation',
+          this.check('Parts drop off the screen, then the new avatar climbs back in', () => p.switchFx, (v) => { p.switchFx = v; app.changed({ settings: true }); }),
+          el('div', { class: 'row' }, el('button', {
+            class: 'btn', title: 'Play the animation here and in OBS',
+            onclick: () => { PT.Transition.play(); PT.Storage.live({ type: 'switch-out', test: true }); },
+          }, 'Test the animation'))),
+        this.section('About hotkeys',
+          A.supported
+            ? el('ul', { class: 'help-list' },
+              el('li', {}, 'They work everywhere, even while you\'re in a game, as long as EASY-TUBER is running.'),
+              el('li', {}, 'While EASY-TUBER is running, the keys you bind don\'t reach other programs. Use combinations you don\'t need elsewhere, like Ctrl+Alt+1 or the numpad.'),
+              el('li', {}, 'OBS shows the switch too: the stage page follows along.'))
+            : this.note('Global hotkeys work in the EASY-TUBER desktop app.'),
+          anyBad ? el('p', { class: 'note warn-text' }, 'A hotkey shown in red is taken by another program, so it won\'t work. Pick a different one.') : null),
+      );
     },
   };
 
