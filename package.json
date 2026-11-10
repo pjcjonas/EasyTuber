@@ -8,9 +8,10 @@
   "repository": "github:pjcjonas/EasyTuber",
   "scripts": {
     "start": "electron .",
+    "test": "node --test \"tests/*.test.js\"",
     "dist": "npm run dist:win",
-    "dist:win": "electron-packager . EASY-TUBER --platform=win32 --arch=x64 --out=dist --overwrite --icon=build/icon.ico --prune=true --ignore=\"^/(dist|saved|docs|build/make-icon\\.py|build/logo-source\\.jpg|build/icon\\.icns|build/mac-extend\\.plist|server\\.py|start\\.bat|\\.claude|\\.github|\\.gitignore|README\\.md)\" --app-copyright=\"EASY-TUBER\" --win32metadata.ProductName=EASY-TUBER --win32metadata.FileDescription=EASY-TUBER",
-    "dist:mac": "electron-packager . EASY-TUBER --platform=darwin --arch=x64,arm64 --out=dist --overwrite --icon=build/icon.icns --prune=true --ignore=\"^/(dist|saved|docs|build/make-icon\\.py|build/logo-source\\.jpg|build/icon\\.ico|build/mac-extend\\.plist|server\\.py|start\\.bat|\\.claude|\\.github|\\.gitignore|README\\.md)\" --app-copyright=\"EASY-TUBER\" --app-bundle-id=com.pjcjonas.easytuber --app-category-type=public.app-category.entertainment --extend-info=build/mac-extend.plist"
+    "dist:win": "electron-packager . EASY-TUBER --platform=win32 --arch=x64 --out=dist --overwrite --icon=build/icon.ico --prune=true --ignore=\"^/(dist|saved|docs|tests|build/make-icon\\.py|build/logo-source\\.jpg|build/icon\\.icns|build/mac-extend\\.plist|server\\.py|start\\.bat|\\.claude|\\.github|\\.gitignore|README\\.md)\" --app-copyright=\"EASY-TUBER\" --win32metadata.ProductName=EASY-TUBER --win32metadata.FileDescription=EASY-TUBER",
+    "dist:mac": "electron-packager . EASY-TUBER --platform=darwin --arch=x64,arm64 --out=dist --overwrite --icon=build/icon.icns --prune=true --ignore=\"^/(dist|saved|docs|tests|build/make-icon\\.py|build/logo-source\\.jpg|build/icon\\.ico|build/mac-extend\\.plist|server\\.py|start\\.bat|\\.claude|\\.github|\\.gitignore|README\\.md)\" --app-copyright=\"EASY-TUBER\" --app-bundle-id=com.pjcjonas.easytuber --app-category-type=public.app-category.entertainment --extend-info=build/mac-extend.plist"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

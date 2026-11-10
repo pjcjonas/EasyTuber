@@ -108,7 +108,16 @@
     motion: { ...PT.DEFAULT_MOTION },
     mic: { ...PT.DEFAULT_MIC },
     stage: { ...PT.DEFAULT_STAGE },
+    /* Avatar layouts. The active one's look lives in parts/order/root/sheets above (look: null);
+       every other avatar keeps its own look here. activeAvatar can also be 'random' (a random mix). */
+    avatars: [{ id: 'a1', name: 'Avatar 1', hotkey: '', look: null }],
+    activeAvatar: 'a1',
+    hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
+    switchFx: true,                      // drop out / climb back in when switching
   });
+
+  // the fields that make up one avatar's look
+  PT.LOOK_KEYS = ['parts', 'order', 'root', 'sheets'];
 
   // Fill in anything missing (older files / partial imports)
   PT.normalizeProject = (p) => {
@@ -129,6 +138,21 @@
     out.motion = { ...d.motion, ...(p.motion || {}) };
     out.mic = { ...d.mic, ...(p.mic || {}) };
     out.stage = { ...d.stage, ...(p.stage || {}) };
+
+    // avatars: files from before avatars existed get one avatar holding the current look
+    const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+    const seen = new Set();
+    out.avatars = (Array.isArray(p.avatars) ? p.avatars : [])
+      .filter((a) => a && typeof a.id === 'string' && a.id && !seen.has(a.id) && seen.add(a.id))
+      .map((a) => ({ id: a.id, name: str(a.name, 60) || 'Avatar', hotkey: str(a.hotkey, 64), look: a.look && typeof a.look === 'object' ? a.look : null }));
+    if (!out.avatars.length) out.avatars = [{ id: 'a1', name: str(p.name, 60) || 'Avatar 1', hotkey: '', look: null }];
+    // 'random' only when every avatar has its own look stored (else one avatar's look is the one above)
+    const known = out.avatars.some((a) => a.id === p.activeAvatar);
+    const randomOk = p.activeAvatar === 'random' && out.avatars.every((a) => a.look);
+    out.activeAvatar = known || randomOk ? p.activeAvatar : (out.avatars.find((a) => !a.look) || out.avatars[0]).id;
+    for (const a of out.avatars) if (a.id === out.activeAvatar) a.look = null;   // its look is the one above
+    out.hotkeys = { next: str((p.hotkeys || {}).next, 64), random: str((p.hotkeys || {}).random, 64) };
+    out.switchFx = p.switchFx !== false;
     return out;
   };
 

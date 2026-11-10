@@ -1,5 +1,5 @@
 /* EASY-TUBER desktop app (Electron main process). */
-const { app, BrowserWindow, Menu, session, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, session, shell, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { start } = require('./server');
@@ -9,6 +9,20 @@ const ICON = path.join(ROOT, 'build', 'icon.png');
 const BG = '#000000';
 let mainWindow = null;
 let origin = '';
+let srv = null;
+
+/* Global hotkeys for switching avatars. The editor sends its bindings through the local server;
+   they work while another program (a game) has focus. A press is sent to the pages as a
+   "hotkey" event, and the editor does the switch. Returns which ones the system accepted. */
+function setHotkeys(bindings) {
+  globalShortcut.unregisterAll();
+  return bindings.map(({ accelerator, action }) => {
+    let ok = false;
+    try { ok = globalShortcut.register(accelerator, () => srv && srv.broadcast('hotkey', { action })); } catch (e) { ok = false; }
+    return { accelerator, ok };
+  });
+}
+app.on('will-quit', () => globalShortcut.unregisterAll());
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -54,7 +68,7 @@ async function boot() {
   });
   session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission));
 
-  const srv = await start({ root: ROOT, saveFile: avatarFile() });
+  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys });
   origin = `http://localhost:${srv.port}`;
   createMainWindow();
 }

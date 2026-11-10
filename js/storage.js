@@ -130,10 +130,31 @@
       fetch('api/live', { method: 'POST', body: JSON.stringify(msg), keepalive: true }).catch(() => {});
     },
 
+    // one event stream per page, shared by onMessage and onHotkey
+    events() {
+      if (!this._es && this.server && window.EventSource) this._es = new EventSource('api/events');
+      return this._es || null;
+    },
+
+    /* Global hotkeys (desktop app only): the main process registers them with the system.
+       Returns [{ accelerator, ok }], or null where global hotkeys aren't available. */
+    async setHotkeys(bindings) {
+      if (!this.server) return null;
+      try {
+        const r = await fetch('api/hotkeys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bindings }) });
+        if (!r.ok) return null;
+        return (await r.json()).results || null;
+      } catch (e) { return null; }
+    },
+    onHotkey(fn) {
+      const es = this.events();
+      if (es) es.addEventListener('hotkey', (e) => { try { fn(JSON.parse(e.data).action); } catch (err) { /* ignore */ } });
+    },
+
     onMessage(fn) {
       if (channel) channel.addEventListener('message', (e) => fn(e.data));
-      if (!this.server || !window.EventSource) return;
-      const es = new EventSource('api/events');
+      const es = this.events();
+      if (!es) return;
       let first = true;
       es.addEventListener('hello', () => {
         // reconnected after the server restarted: re-read the avatar in case it changed

@@ -12,9 +12,24 @@ const MIME = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.mp4': 'video/mp4',
 };
 const STATIC_DIRS = ['css', 'js', 'build', 'media'];
-const MAX_BODY = 200 * 1024 * 1024;
+const MAX_BODY = 1024 * 1024 * 1024;   // several avatars' images, as data URLs
 
-function start({ root, saveFile, port = 8777, tries = 10 }) {
+/* A global hotkey binding from the page: { accelerator: "Ctrl+Alt+1", action: "avatar:<id>" | "next" | "random" }.
+   A key with no modifier is only allowed for F-keys and the numpad: a bare letter would stop
+   working in every other program while the app runs. */
+const MODIFIERS = new Set(['Ctrl', 'Control', 'Alt', 'Shift', 'Super', 'Cmd', 'Command', 'CommandOrControl', 'CmdOrCtrl', 'Option', 'Meta']);
+const SOLO_KEY = /^(F([1-9]|1\d|2[0-4])|num(\d|add|sub|mult|div|dec))$/;
+const KEY = /^([A-Z0-9]|F([1-9]|1\d|2[0-4])|num(\d|add|sub|mult|div|dec)|Space|Up|Down|Left|Right|Home|End|PageUp|PageDown|Insert|Delete|Plus|[-=[\];',./\\`])$/;
+function validBinding(b) {
+  if (!b || typeof b.accelerator !== 'string' || typeof b.action !== 'string') return false;
+  if (b.accelerator.length > 64 || !/^(next|random|avatar:[\w-]{1,40})$/.test(b.action)) return false;
+  const parts = b.accelerator.split('+');
+  const key = parts.pop(), mods = parts;
+  if (!KEY.test(key) || !mods.every((m) => MODIFIERS.has(m)) || new Set(mods).size !== mods.length) return false;
+  return mods.length > 0 || SOLO_KEY.test(key);
+}
+
+function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null }) {
   let version = 0;
   const listeners = new Set();
 
@@ -103,6 +118,19 @@ function start({ root, saveFile, port = 8777, tries = 10 }) {
         res.writeHead(204); return res.end();
       }
 
+      // the editor's hotkeys -> the desktop app registers them system-wide (see main.js)
+      if (urlPath === '/api/hotkeys' && req.method === 'POST') {
+        // JSON only: a request from another website can't send this without a CORS preflight, which is refused
+        if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
+        if (!onHotkeys) return sendJson(res, 501, { error: 'global hotkeys are not available' });
+        let data;
+        try { data = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+        const list = data && Array.isArray(data.bindings) ? data.bindings : null;
+        if (!list || list.length > 64 || !list.every(validBinding)) return sendJson(res, 400, { error: 'bad hotkeys' });
+        const results = await onHotkeys(list.map((b) => ({ accelerator: b.accelerator, action: b.action })));
+        return sendJson(res, 200, { results });
+      }
+
       if (urlPath === '/api/events' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
         res.write(`retry: 1000\nevent: hello\ndata: ${JSON.stringify({ version })}\n\n`);
@@ -127,10 +155,10 @@ function start({ root, saveFile, port = 8777, tries = 10 }) {
       server.once('error', (err) => {
         if (err.code === 'EADDRINUSE' && p < port + tries - 1) { p++; attempt(); } else reject(err);
       });
-      server.listen(p, '127.0.0.1', () => resolve({ port: p, server, close: () => server.close() }));
+      server.listen(p, '127.0.0.1', () => resolve({ port: p, server, broadcast, close: () => server.close() }));
     };
     attempt();
   });
 }
 
-module.exports = { start };
+module.exports = { start, validBinding };
