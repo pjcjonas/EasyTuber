@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/pjcjonas/EasyTuber/releases/latest"><b>Download for Windows or Mac</b></a> ·
-  <a href="https://github.com/pjcjonas/EasyTuber/releases/latest/download/EasyTuber-tutorial.mp4"><b>Watch the video tutorial</b></a>
+  <a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.0.0/EasyTuber-tutorial.mp4"><b>Watch the video tutorial</b></a>
 </p>
 
 # EASY-TUBER
