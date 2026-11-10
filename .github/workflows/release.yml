@@ -83,4 +83,11 @@ jobs:
 
           See the [README](https://github.com/pjcjonas/EasyTuber#readme) for how to use it.
           EOF
-          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --title "EasyTuber $GITHUB_REF_NAME" --notes-file notes.md
+          # a draft release for this tag may already hold extra files (e.g. the tutorial video):
+          # add the builds to it and publish it; otherwise create the release
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "EasyTuber $GITHUB_REF_NAME" --notes-file notes.md --draft=false --latest
+          else
+            gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --title "EasyTuber $GITHUB_REF_NAME" --notes-file notes.md
+          fi

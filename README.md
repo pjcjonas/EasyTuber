@@ -15,9 +15,9 @@ Nothing is uploaded anywhere. Your microphone and your art stay on your computer
 
 ## Video tutorial
 
-A narrated walkthrough (3:54): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, and streaming in OBS. Click the picture to download and play it.
+A narrated walkthrough (4:31): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, switching avatars with hotkeys, and streaming in OBS. Click the picture to download and play it.
 
-<a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.0.0/EasyTuber-tutorial.mp4"><img src="docs/tutorial-thumbnail.jpg" alt="Watch the EasyTuber video tutorial (3:54)" width="720"></a>
+<a href="https://github.com/pjcjonas/EasyTuber/releases/download/v1.1.0/EasyTuber-tutorial.mp4"><img src="docs/tutorial-thumbnail.jpg" alt="Watch the EasyTuber video tutorial (4:31)" width="720"></a>
 
 ![The EASY-TUBER editor](docs/screenshots/editor.png)
 
