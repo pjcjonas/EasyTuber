@@ -7,6 +7,14 @@
   <a href="#video-tutorial"><b>Watch the video tutorial</b></a>
 </p>
 
+
+
+https://github.com/user-attachments/assets/db6d897d-283b-4d19-9cbe-ead5bc2c69ac
+
+
+
+
+
 # EASY-TUBER
 
 A desktop PNGTuber maker with a built-in skeleton. You upload the body parts of your character, line them up once, and your avatar **breathes, blinks, talks to your microphone, bobs its head, swings its hair and gestures with its arms**. All the motion is pre-configured; you only choose how strong it is. Then you put it in OBS with a transparent background.
