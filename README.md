@@ -21,6 +21,12 @@ A desktop PNGTuber maker with a built-in skeleton. You upload the body parts of 
 
 Nothing is uploaded anywhere. Your microphone and your art stay on your computer.
 
+
+
+https://github.com/user-attachments/assets/8711d20d-2a99-4d6d-908e-319c25ee7503
+
+
+
 ## Video tutorial
 
 A narrated walkthrough (3:54): uploading your art, lining up the rig, eyes and mouth, sprite sheets, the microphone, motion, and streaming in OBS. Click the picture to download and play it.
