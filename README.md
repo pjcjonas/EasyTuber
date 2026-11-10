@@ -7,13 +7,7 @@
   <a href="#video-tutorial"><b>Watch the video tutorial</b></a>
 </p>
 
-
-
-https://github.com/user-attachments/assets/db6d897d-283b-4d19-9cbe-ead5bc2c69ac
-
-
-
-
+https://github.com/user-attachments/assets/f4ea52c9-6cbb-42f4-941d-913532157c47
 
 # EASY-TUBER
 
@@ -21,11 +15,7 @@ A desktop PNGTuber maker with a built-in skeleton. You upload the body parts of 
 
 Nothing is uploaded anywhere. Your microphone and your art stay on your computer.
 
-
-
 https://github.com/user-attachments/assets/8711d20d-2a99-4d6d-908e-319c25ee7503
-
-
 
 ## Video tutorial
 
