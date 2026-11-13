@@ -24,6 +24,9 @@
 
       this.renderer = new PT.Renderer($('stage'));
       this.renderer.stageMode = this.stageMode;
+      // ?cam=1: the hidden stage page the desktop app films for the virtual camera
+      this.camMode = this.stageMode && new URLSearchParams(location.search).has('cam');
+      this.renderer.camMode = this.camMode;
       this.animator = new PT.Animator();
       this.save = PT.debounce(() => PT.Storage.save(this.project), 500);
       // first run with the file server: copy the avatar from this browser into the file OBS reads
@@ -43,7 +46,7 @@
       document.body.classList.add('stage-mode');
       document.title = 'EASY-TUBER Stage';
       this.mode = 'live';
-      this.inOBS = !!window.obsstudio;
+      this.inOBS = !!window.obsstudio || this.camMode;   // no mic of its own: the editor's mic drives it
       // an avatar switch: the editor says "switch-out", then saves the new avatar
       let switching = false;
       const reload = PT.debounce(async () => {
@@ -64,6 +67,7 @@
         if (msg.type === 'project-saved') reload();
         else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.t = performance.now(); }
         else if (msg.type === 'blink') this.animator.blink();
+        else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'switch-out') {
           if (msg.test) PT.Transition.play();
           else { switching = true; PT.Transition.out(); }
@@ -101,7 +105,7 @@
       $('btnMic').onclick = () => this.toggleMic();
       $('btnStage').onclick = () => {
         const url = location.href.split('?')[0].split('#')[0] + '?stage=1';
-        window.open(url, 'easytuber-stage', 'width=640,height=720');
+        window.open(url, 'easytuber-stage', 'width=960,height=540');
       };
       $('btnExport').onclick = () => {
         const name = (this.project.name || 'easy-tuber').toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -154,6 +158,11 @@
       this.initKeys();
       this.setMode('edit');
 
+      // actions (js/actions/*.js): the server plays them on every page, this one included
+      PT.Actions.onError = (def, e) => PT.toast(`Action "${def.label}" stopped with an error: ${e.message}`, 'error', 8000);
+      PT.Storage.setActions(PT.Actions.catalog());
+      PT.Storage.onLive((msg) => { if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project); });
+
       // global hotkeys: registered by the desktop app, delivered here even while you're in a game
       PT.Storage.onHotkey((action) => PT.Avatars.handle(action));
       PT.Avatars.register();
@@ -185,6 +194,22 @@
       PT.Panels.renderInspector();
       PT.Panels.renderStageTab();
       PT.Panels.renderAvatars();
+    },
+
+    /* Play an action here, in the stage window and in OBS. In the desktop app it goes through the
+       same URL Streamer.bot uses, so a working Test means a working Streamer.bot setup. */
+    async playAction(id) {
+      if (!PT.Actions.get(id)) return;
+      if (this.mode === 'edit') this.setMode('live');   // Edit shows the rest pose, without motion
+      if (PT.Storage.server) {
+        const url = new URL('api/streamerbot', location.href);
+        url.searchParams.set('action', id);
+        try { await PT.Storage.runActionUrl(url); } catch (e) { PT.toast('Could not play the action: ' + e.message, 'error'); }
+        return;
+      }
+      const msg = PT.Actions.newPlay(id);
+      PT.Actions.play(id, msg, this.project);
+      PT.Storage.post(msg);
     },
 
     setMode(mode) {
@@ -322,19 +347,27 @@
 
       const anim = this.animator.update(dt, level, p.motion, p.mic);
       this.lastAnim = anim;
+      const act = PT.Actions.update(now, p);   // running actions: extra motion + eye / mouth overrides
 
       const editing = !this.stageMode && this.mode === 'edit';
+      const showAct = !!act && !editing;        // Edit mode shows the rest pose only
       const R = this.renderer;
       R.resize();
-      const pose = R.computePose(p, editing ? null : anim.deltas);
+      const pose = R.computePose(p, editing ? null : showAct ? PT.Actions.mergeDeltas(anim.deltas, act.deltas) : anim.deltas);
       this.lastPose = pose;
+      if (showAct) PT.Actions.setPose(pose, R);
       R.clear(p, editing);
+      if (showAct) PT.Actions.draw('behind', R);
       const switching = PT.Transition.active;
-      R.drawRig(p, pose, editing ? this.previewStates : anim.states, {
+      const actFx = showAct && PT.Actions.hasPartFx;
+      R.drawRig(p, pose, editing ? this.previewStates : showAct ? { ...anim.states, ...act.states } : anim.states, {
         dimPlaceholders: editing,
         onionPart: editing && p.stage.onion ? this.selected : null,
-        fx: switching ? (id, t) => PT.Transition.fx(id, t) : null,
+        fx: switching || actFx
+          ? (id, t) => PT.Actions.combineFx(switching ? PT.Transition.fx(id, t) : null, actFx ? PT.Actions.partFx(id) : null)
+          : null,
       });
+      if (showAct) PT.Actions.draw('front', R);
       if (editing && !switching) PT.Editor.drawOverlay(pose);
       if (!this.stageMode) this.updateMeter(anim);
 

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>NSCameraUsageDescription</key>
+  <string>EasyTuber sends your avatar to the OBS Virtual Camera. It never looks through your real camera.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>EasyTuber listens to your microphone to make your avatar talk. Audio never leaves your computer.</string>
 </dict>

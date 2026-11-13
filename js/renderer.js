@@ -9,6 +9,7 @@
       this.ctx = canvas.getContext('2d');
       this.dpr = 1;
       this.stageMode = false;
+      this.camMode = false;     // virtual camera: a camera picture can't be transparent
       this.checker = null;
     }
 
@@ -27,10 +28,11 @@
       return M.mul(M.t((w - PT.STAGE_W * k) / 2, (h - PT.STAGE_H * k) / 2), M.s(k));
     }
 
-    // whole-character transform, scaled around the bottom-center of the stage
+    // whole-character transform: character space -> stage, scaled around the character's
+    // bottom-center, which sits at the bottom-center of the stage
     rootMatrix(project) {
-      const r = project.root, cx = PT.STAGE_W / 2, cy = PT.STAGE_H;
-      return M.chain(M.t(cx + r.x, cy + r.y), M.s(r.scale), M.t(-cx, -cy));
+      const r = project.root;
+      return M.chain(M.t(PT.STAGE_W / 2 + r.x, PT.STAGE_H + r.y), M.s(r.scale), M.t(-PT.CHAR_W / 2, -PT.CHAR_H));
     }
 
     static restMatrix(p) {
@@ -81,7 +83,7 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const st = project.stage;
-      const color = st.bg === 'custom' ? st.color : PT.BG_COLORS[st.bg];
+      const color = (st.bg === 'custom' ? st.color : PT.BG_COLORS[st.bg]) || (this.camMode ? '#000000' : null);
 
       if (this.stageMode) {
         if (color) { ctx.fillStyle = color; ctx.fillRect(0, 0, canvas.width, canvas.height); }
@@ -122,7 +124,7 @@
         const want = def.states.length > 1 ? (states[id] || def.states[0]) : 'main';
         const r = PT.Assets.resolve(id, want, usePH);
         if (!r) continue;
-        const fx = opts.fx ? opts.fx(id, now) : null;   // avatar-switch animation
+        const fx = opts.fx ? opts.fx(id, now) : null;   // avatar-switch animation and actions
         if (fx && fx.hide) continue;
         // onion skin: while lining up a frame, show the part's first frame faintly underneath
         if (!fx && opts.onionPart === id && !r.entry.isPlaceholder) {
@@ -137,12 +139,12 @@
         }
         let m = this.entryMatrix(pose, id, r.entry, r.squash, usePH, p.adj && p.adj[r.state]);
         if (fx) {
-          // move and spin the part around its own centre, in screen space
+          // move, spin and scale the part around its own centre, in screen space
           const bb = r.entry.bbox, [cx, cy] = M.apply(m, bb.x + bb.w / 2, bb.y + bb.h / 2);
-          m = M.chain(M.t(cx + fx.dx * k, cy + fx.dy * k), M.r(fx.rot), M.t(-cx, -cy), m);
+          m = M.chain(M.t(cx + (fx.dx || 0) * k, cy + (fx.dy || 0) * k), M.r(fx.rot || 0), M.s(fx.scale ?? 1), M.t(-cx, -cy), m);
         }
         ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
-        ctx.globalAlpha = r.entry.isPlaceholder && opts.dimPlaceholders ? 0.55 : 1;
+        ctx.globalAlpha = (r.entry.isPlaceholder && opts.dimPlaceholders ? 0.55 : 1) * (fx ? fx.alpha ?? 1 : 1);
         ctx.drawImage(r.entry.source, 0, 0, r.entry.w, r.entry.h);
       }
       ctx.globalAlpha = 1;

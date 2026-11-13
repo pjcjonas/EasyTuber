@@ -18,6 +18,7 @@
       this.renderMic();
       this.renderStageTab();
       this.renderAvatars();
+      this.renderActions();
     },
 
     showTab(name) {
@@ -417,6 +418,34 @@
       return el('div', { class: 'obs-row' }, input, copy);
     },
 
+    /* Virtual camera: the desktop app sends the stage to the "OBS Virtual Camera" device,
+       which Zoom, Discord, Teams etc. list as a camera. cam = the last status from the app. */
+    cameraBox() {
+      const cam = this.cam;
+      if (cam === undefined) {            // first time: ask the app (null = not the desktop app)
+        this.cam = null;
+        PT.Storage.vcam().then((s) => { if (s) { this.cam = s; this.renderStageTab(); } });
+      }
+      if (!cam) return null;
+      const btn = el('button', {
+        class: 'btn' + (cam.on ? '' : ' primary'), disabled: !!this.camBusy,
+        onclick: async () => {
+          this.camBusy = true; this.renderStageTab();
+          const s = await PT.Storage.vcam(!cam.on);
+          this.camBusy = false;
+          if (s) this.cam = s;
+          this.renderStageTab();
+          if (!s) PT.toast('The virtual camera did not answer. Try restarting EASY-TUBER.', 'error', 7000);
+          else if (s.error) PT.toast(s.error, 'error', 12000);
+          else if (s.on) PT.toast(`Camera on. Pick "${s.device}" as the camera in your call or chat program.`, '', 8000);
+        },
+      }, this.camBusy ? 'Working…' : cam.on ? 'Stop camera' : 'Start camera');
+      return this.section('Virtual camera',
+        el('div', { class: 'row' }, btn, el('span', { class: 'chip' + (cam.on ? ' hot' : '') }, cam.on ? 'on' : 'off')),
+        cam.error ? el('p', { class: 'note warn-text' }, cam.error) : null,
+        this.note(`Shows your avatar as a camera in Zoom, Discord, Teams and others: choose "${cam.device}" there. Needs OBS Studio installed (not running). A camera can't be transparent, so Transparent shows black.`));
+    },
+
     renderStageTab() {
       const host = document.getElementById('tab-stageTab');
       const st = this.project.stage, app = this.app;
@@ -460,11 +489,13 @@
         this.section('Sprite sheets', this.sheetList()),
         this.section('Draw order (top = front)', list),
         this.section('Streaming with OBS', this.obsUrl(), el('ol', { class: 'help-list' },
-          el('li', {}, 'In OBS: + → Browser. Paste the URL above, width 1000, height 1000.'),
+          el('li', {}, 'In OBS: + → Browser. Paste the URL above, width 1920, height 1080.'),
           el('li', {}, 'Leave Background on Transparent: no chroma key needed.'),
           el('li', {}, 'Keep EASY-TUBER open with the mic on. It can be minimized.')),
           this.note('Or use Window Capture: pick Green screen, click "Open stage window" and capture "EASY-TUBER Stage" with a Chroma Key filter.')),
       );
+      const camera = this.cameraBox();
+      if (camera) host.firstChild.after(camera);   // under Background, which it uses
       for (let i = before; i < this.syncers.length; i++) this.syncers[i].stageTab = true;
     },
 
@@ -596,6 +627,127 @@
       );
     },
   };
+
+  /* ---------- Actions tab ---------- */
+  Object.assign(Panels, {
+    // one action: play it, its hotkey, its settings
+    actionRow(def) {
+      const p = this.project, app = this.app;
+      const cfg = () => (p.actions[def.id] = p.actions[def.id] || { hotkey: '', settings: {} });
+      const settings = def.settings.map((s) => {
+        const get = () => PT.Actions.settingsFor(p, def)[s.key];
+        const set = (v) => { cfg().settings[s.key] = v; app.changed({ settings: true }); };
+        return s.type === 'check'
+          ? this.check(s.label, get, set)
+          : this.field(s.label, { min: s.min, max: s.max, step: s.step, suffix: s.suffix, get, set: (v) => set(PT.clamp(v, s.min, s.max)) });
+      });
+      return el('div', { class: 'avatar-row action-row' },
+        el('div', { class: 'av-top' },
+          el('span', { class: 'action-name', title: 'id: ' + def.id }, def.label),
+          el('span', { class: 'action-len' }, (def.duration / 1000).toFixed(1) + ' s'),
+          el('button', { class: 'btn small', title: 'Play it here, in the stage window and in OBS', onclick: () => app.playAction(def.id) }, '▶ Test')),
+        el('div', { class: 'av-bottom' }, this.hotkeyRow('action:' + def.id, (p.actions[def.id] || {}).hotkey || '')),
+        settings.length ? el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), ...settings) : null);
+    },
+
+    // Streamer.bot: one step or a sequence, as a URL for a Fetch URL sub-action
+    streamerBot(defs) {
+      const p = this.project;
+      const choices = [
+        ...defs.map((d) => [d.id, d.label]),
+        ['next', 'Next avatar'], ['random', 'Random mix'],
+        ...p.avatars.map((a) => ['avatar:' + a.id, 'Show ' + a.name]),
+      ];
+      const labels = new Map(choices);
+      const pick = el('select', { 'aria-label': 'Action for Streamer.bot' }, ...choices.map(([v, l]) => el('option', { value: v }, l)));
+      if (labels.has(this.sbPick)) pick.value = this.sbPick;
+      const seq = this.sbSequence = (this.sbSequence || []).filter((v) => labels.has(v));
+      const timing = this.sbTiming = this.sbTiming || { startDelay: '', delay: '' };
+
+      const url = el('input', { class: 'obs-url', readonly: true, onfocus: (e) => e.target.select() });
+      const copy = el('button', { class: 'btn', onclick: async () => {
+        try { await navigator.clipboard.writeText(url.value); } catch (e) { url.select(); document.execCommand('copy'); }
+        PT.toast('Streamer.bot URL copied');
+      } }, 'Copy');
+      const list = el('ol', { class: 'help-list seq-list', 'aria-label': 'Sequence' });
+      const fields = [['startDelay', 'Start delay (s)', 0, '0'], ['delay', 'Time between steps (s)', 0.1, 'Auto']].map(([key, label, min, ph]) => {
+        const input = el('input', { type: 'number', min, max: 60, step: 0.1, placeholder: ph, value: timing[key] });
+        input.addEventListener('input', () => { timing[key] = input.value; update(); });
+        return { key, input, row: el('div', { class: 'field field-inline' }, el('label', {}, label), input) };
+      });
+      const timingBox = el('div', {}, ...fields.map((f) => f.row));
+      const bad = el('p', { class: 'note warn-text' }, 'Start delay is 0 to 60 s, time between steps 0.1 to 60 s, in tenths. Leave "Auto" to wait for each step to finish.');
+
+      const build = (useSeq) => {
+        const u = new URL('/api/streamerbot', location.origin);
+        u.hostname = '127.0.0.1';
+        if (!useSeq) { u.searchParams.set('action', pick.value); return u; }
+        u.searchParams.set('sequence', seq.join(','));
+        for (const f of fields) if (f.input.value !== '') u.searchParams.set(f.key, String(f.input.valueAsNumber));
+        return u;
+      };
+      const test = async (useSeq) => {
+        const u = build(useSeq);
+        u.hostname = location.hostname;          // same origin as this page
+        if (this.app.mode === 'edit') this.app.setMode('live');
+        try { await PT.Storage.runActionUrl(u); PT.toast(useSeq ? 'Sequence started' : 'Playing ' + labels.get(pick.value)); } catch (e) { PT.toast('Could not run it: ' + e.message, 'error'); }
+      };
+      const add = el('button', { class: 'btn small', onclick: () => { seq.push(pick.value); update(); } }, 'Add to sequence');
+      const testSeq = el('button', { class: 'btn small', onclick: () => test(true) }, '▶ Test sequence');
+      const clear = el('button', { class: 'btn small', onclick: () => { seq.length = 0; update(); } }, 'Clear');
+      const seqRow = el('div', { class: 'row' }, testSeq, clear);
+
+      const update = () => {
+        const has = seq.length > 0;
+        const invalid = has && fields.some((f) => !f.input.validity.valid);
+        url.value = invalid ? '' : build(has).href;
+        copy.disabled = testSeq.disabled = invalid;
+        add.disabled = seq.length >= 8;
+        list.hidden = seqRow.hidden = timingBox.hidden = !has;
+        bad.hidden = !invalid;
+        list.replaceChildren(...seq.map((v, i) => el('li', {}, labels.get(v) + ' ',
+          el('button', { class: 'icon-btn', title: 'Remove this step', onclick: () => { seq.splice(i, 1); update(); } }, '✕'))));
+      };
+      pick.addEventListener('change', () => { this.sbPick = pick.value; update(); });
+      update();
+
+      return this.section('Streamer.bot',
+        this.note('Pick an action, or build a sequence of up to 8 steps. The URL plays the sequence when there is one.'),
+        pick,
+        el('div', { class: 'row', style: { marginTop: '6px' } },
+          el('button', { class: 'btn small', onclick: () => test(false) }, '▶ Test'), add),
+        list, timingBox, bad, seqRow,
+        el('div', { class: 'obs-row', style: { marginTop: '8px' } }, url, copy),
+        el('ol', { class: 'help-list' },
+          el('li', {}, 'In Streamer.bot on this computer, add a "Fetch URL" sub-action and paste the URL.'),
+          el('li', {}, 'Add the header X-EasyTuber-Control with the value streamerbot.'),
+          el('li', {}, 'EASY-TUBER must be running. The stage page in OBS plays it too.')));
+    },
+
+    renderActions() {
+      const host = document.getElementById('tab-actions');
+      if (!host || this.app.stageMode) return;
+      if (this.capture) this.capture.cancel();
+      this.syncers = this.syncers.filter((s) => !s.actionsTab);
+      const before = this.syncers.length;
+      const defs = PT.Actions.list();
+      const server = PT.Storage.server;
+
+      host.innerHTML = '';
+      host.append(
+        this.section('Your actions',
+          defs.length
+            ? el('div', { class: 'avatar-list' }, ...defs.map((d) => this.actionRow(d)))
+            : el('div', {},
+              this.note('No actions yet. An action is an animation you made: a wave, a spin, a prop that flies in.'),
+              this.note('Each one is a file in js/actions/. See js/actions/README.md for how to write one.')),
+          defs.length ? this.note('Test switches the editor to Live. OBS and the stage window play it too.') : null),
+        server ? this.streamerBot(defs)
+          : this.section('Streamer.bot', this.note('Hotkeys and Streamer.bot work in the EASY-TUBER desktop app.')),
+      );
+      for (let i = before; i < this.syncers.length; i++) this.syncers[i].actionsTab = true;
+    },
+  });
 
   PT.Panels = Panels;
 })(window.PT);

@@ -1,8 +1,9 @@
 /* EASY-TUBER desktop app (Electron main process). */
-const { app, BrowserWindow, Menu, session, shell, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, session, shell, dialog, globalShortcut, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { start } = require('./server');
+const vcam = require('./vcam');
 
 const ROOT = path.join(__dirname, '..');
 const ICON = path.join(ROOT, 'build', 'icon.png');
@@ -11,18 +12,70 @@ let mainWindow = null;
 let origin = '';
 let srv = null;
 
-/* Global hotkeys for switching avatars. The editor sends its bindings through the local server;
-   they work while another program (a game) has focus. A press is sent to the pages as a
-   "hotkey" event, and the editor does the switch. Returns which ones the system accepted. */
+/* Global hotkeys for switching avatars and playing actions. The editor sends its bindings through
+   the local server; they work while another program (a game) has focus. The server plays an action
+   on every page, or sends an avatar switch to the editor as a "hotkey" event.
+   Returns which ones the system accepted. */
 function setHotkeys(bindings) {
   globalShortcut.unregisterAll();
   return bindings.map(({ accelerator, action }) => {
     let ok = false;
-    try { ok = globalShortcut.register(accelerator, () => srv && srv.broadcast('hotkey', { action })); } catch (e) { ok = false; }
+    try { ok = globalShortcut.register(accelerator, () => srv && srv.trigger(action)); } catch (e) { ok = false; }
     return { accelerator, ok };
   });
 }
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopCamera(); });
+
+/* Virtual camera: a hidden copy of the stage page is drawn off screen, and its frames are sent
+   to the OBS Virtual Camera driver (see vcam.js). The page is the same one OBS loads, so the
+   mic, blinks and avatar switches reach it the same way. */
+const CAM_W = 1920, CAM_H = 1080;
+let camera = null;      // { out, win, timer, frame }
+let cameraError = '';
+
+function stopCamera() {
+  if (!camera) return;
+  const c = camera;
+  camera = null;
+  clearInterval(c.timer);
+  try { c.out.close(); } catch (e) { /* already gone */ }
+  if (c.win && !c.win.isDestroyed()) c.win.destroy();
+}
+
+async function startCamera() {
+  if (camera) return;
+  cameraError = '';
+  // macOS asks before a program may touch cameras at all
+  if (process.platform === 'darwin') { try { await systemPreferences.askForMediaAccess('camera'); } catch (e) { /* try anyway */ } }
+  let out;
+  try { out = await vcam.open(CAM_W, CAM_H); } catch (e) { cameraError = e.message; return; }
+  if (camera) { out.close(); return; }   // started twice at once
+  const win = new BrowserWindow({
+    show: false, width: CAM_W, height: CAM_H, useContentSize: true, backgroundColor: '#000000',
+    webPreferences: { offscreen: true, contextIsolation: true, sandbox: true, backgroundThrottling: false },
+  });
+  const c = camera = { out, win, timer: null, frame: null };
+  win.webContents.setFrameRate(vcam.FPS);
+  win.webContents.on('paint', (_e, _dirty, image) => {
+    const size = image.getSize();   // bigger than asked on a scaled display
+    const img = size.width === CAM_W && size.height === CAM_H ? image : image.resize({ width: CAM_W, height: CAM_H });
+    c.frame = img.toBitmap();
+  });
+  // a still picture paints nothing new, but the camera goes blank unless frames keep coming
+  c.timer = setInterval(() => {
+    if (!c.frame) return;
+    try { c.out.send(c.frame); } catch (e) { cameraError = 'The virtual camera stopped: ' + e.message; stopCamera(); }
+  }, 1000 / vcam.FPS);
+  win.on('closed', () => { if (camera === c) { c.win = null; stopCamera(); } });
+  win.loadURL(origin + '/?stage=1&cam=1');
+}
+
+// from the editor, through the local server: on = true / false, or nothing for the status only
+async function setCamera(on) {
+  if (on === true) await startCamera();
+  else if (on === false) { stopCamera(); cameraError = ''; }
+  return { on: !!camera, device: vcam.DEVICE_NAME, error: cameraError };
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -68,7 +121,7 @@ async function boot() {
   });
   session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission));
 
-  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys });
+  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys, onVcam: setCamera });
   origin = `http://localhost:${srv.port}`;
   createMainWindow();
 }
@@ -92,7 +145,7 @@ app.on('web-contents-created', (_e, wc) => {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
-          width: 640, height: 720, title: 'EASY-TUBER Stage', icon: ICON, backgroundColor: '#000000', autoHideMenuBar: true,
+          width: 960, height: 540, useContentSize: true, title: 'EASY-TUBER Stage', icon: ICON, backgroundColor: '#000000', autoHideMenuBar: true,
           webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false },
         },
       };

@@ -1,8 +1,12 @@
 /* Rig definition: body parts, hierarchy, default layout, default settings, filename routing. */
 (function (PT) {
-  // Logical stage size (character space). Everything is positioned in these units.
-  PT.STAGE_W = 1000;
-  PT.STAGE_H = 1000;
+  // Logical stage size (the picture OBS and the camera get), in stage units.
+  PT.STAGE_W = 1920;
+  PT.STAGE_H = 1080;
+  // Character space: the frame avatars are laid out in. Its bottom center stands at the
+  // bottom center of the stage, so avatars made for the old square stage still fit.
+  PT.CHAR_W = 1920;
+  PT.CHAR_H = 1080;
 
   /*
    * Parts in hierarchy order (parents always come before children).
@@ -114,6 +118,7 @@
     activeAvatar: 'a1',
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
+    actions: {},                         // { [actionId]: { hotkey, settings: { key: value } } }
   });
 
   // the fields that make up one avatar's look
@@ -153,6 +158,17 @@
     for (const a of out.avatars) if (a.id === out.activeAvatar) a.look = null;   // its look is the one above
     out.hotkeys = { next: str((p.hotkeys || {}).next, 64), random: str((p.hotkeys || {}).random, 64) };
     out.switchFx = p.switchFx !== false;
+    // per action (js/actions/*.js): its global hotkey and its settings. Shared by every avatar.
+    // Entries for actions whose file is gone are kept, in case the file comes back.
+    out.actions = {};
+    for (const [id, a] of Object.entries(p.actions && typeof p.actions === 'object' ? p.actions : {})) {
+      if (!/^[\w-]{1,40}$/.test(id) || !a || typeof a !== 'object') continue;
+      const settings = {};
+      for (const [k, v] of Object.entries(a.settings && typeof a.settings === 'object' ? a.settings : {})) {
+        if (/^[\w-]{1,40}$/.test(k) && (typeof v === 'boolean' || Number.isFinite(v))) settings[k] = v;
+      }
+      out.actions[id] = { hotkey: str(a.hotkey, 64), settings };
+    }
     return out;
   };
 

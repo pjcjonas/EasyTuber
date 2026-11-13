@@ -39,6 +39,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Add koffi's binaries for both Mac processors
+        # npm only installs the one for this runner's processor; the virtual camera needs it in each build
+        run: |
+          v=$(node -p "require('koffi/package.json').version")
+          npm install --no-save --force "@koromix/koffi-darwin-arm64@$v" "@koromix/koffi-darwin-x64@$v"
       - run: npm run dist:mac
       - name: Ad-hoc sign and zip
         # Packaging edits Info.plist, which breaks Electron's own signature; Apple silicon refuses

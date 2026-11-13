@@ -260,7 +260,7 @@ EASY-TUBER serves your avatar on a local web address for OBS: `http://localhost:
 ### Browser Source (recommended: transparent, no chroma key)
 
 1. Keep EASY-TUBER open with **Start mic** on. It can be minimised.
-2. In OBS: **Sources → + → Browser**. Paste the address, set width **1000** and height **1000**.
+2. In OBS: **Sources → + → Browser**. Paste the address, set width **1920** and height **1080**.
 3. Leave the Stage background on **Transparent** (the checkerboard swatch).
 
 The app's microphone drives the avatar in OBS, and your edits show up in OBS straight away. If port 8777 is busy (another copy is already running, for example), the app uses the next free port, warns you, and the Stage tab shows the new address.
@@ -272,6 +272,17 @@ The app's microphone drives the avatar in OBS, and your edits show up in OBS str
 3. In OBS, add a **Window Capture** of *"EASY-TUBER Stage"* and give it a **Chroma Key** filter with the same colour.
 
 ![The stage window on a green screen](docs/screenshots/stage-window.png)
+
+### Virtual camera (Zoom, Discord, Teams and other programs)
+
+EASY-TUBER can show your avatar as a camera, so any program that takes a webcam can use it. It works on Windows and on a Mac.
+
+1. Install [OBS Studio](https://obsproject.com) (version 30 or newer on a Mac). EASY-TUBER uses the camera that OBS installs; OBS doesn't have to be running.
+   * **Mac only, once:** open OBS, click **Start Virtual Camera**, allow the camera extension in **System Settings**, then click **Stop Virtual Camera**. Needs macOS 13 or newer.
+2. In the **Stage** tab, click **Start camera**.
+3. In your call or chat program, choose **OBS Virtual Camera** as the camera.
+
+The camera picture is 1920 × 1080 at 30 frames a second. A camera can't be transparent: the Stage background colour is used, and **Transparent** shows black. The microphone, blinking, motion and avatar hotkeys all work the same as on the stage. Only one program can send to the camera at a time, so stop OBS's own virtual camera first.
 
 The **Stage** tab also has the editor options (placeholder art, joints and bones, dragging attached parts, onion skin), your saved sprite sheets, and the full **draw order** list.
 
@@ -317,6 +328,9 @@ On a Mac, use **Cmd** where this says Ctrl.
 | The meter doesn't move | Check the **Mic → Input** choice. On a Mac, allow EASY-TUBER in **System Settings → Privacy & Security → Microphone**. On Windows, check **Settings → Privacy → Microphone**. |
 | The mouth flaps on noise | Raise **Talk at** or lower **Sensitivity**, or use **Tune to my voice**. |
 | The avatar doesn't move in OBS | Keep EASY-TUBER open with the mic on. Check the Browser Source address matches the one in the Stage tab. |
+| **Start camera** says it needs OBS Studio | Install OBS Studio. On a Mac, also start and stop its virtual camera once and allow the camera extension in System Settings. |
+| **Start camera** says another program is sending | Stop the virtual camera in OBS (or the other program), then click **Start camera** again. |
+| "OBS Virtual Camera" isn't in the program's camera list | Restart that program after installing OBS. On a Mac, allow EASY-TUBER in **System Settings → Privacy & Security → Camera**. |
 | Gaps open between parts when they move | Move the joint (orange cross) to where the part really bends, and draw the part a little bigger under its neighbour. |
 | An avatar hotkey does nothing | Check it isn't red in the Avatars tab (red means another program has it). Keep EASY-TUBER running. On a Mac, some combinations are reserved by macOS; try another. |
 | "Windows protected your PC" | Click **More info → Run anyway**. |
@@ -359,9 +373,10 @@ git push origin v1.0.1
 ```
 electron/main.js    desktop app window, mic permission, stage window
 electron/server.js  local server: serves the app to OBS, saves the avatar file, relays the mic
-build/              logo, icons, the macOS microphone permission text
+electron/vcam.js    virtual camera: sends frames to the OBS Virtual Camera driver (Windows and macOS, through koffi)
+build/              logo, icons, the macOS microphone and camera permission text
 media/intro.mp4     the start-up intro
-index.html          page shell (editor; ?stage=1 = clean capture page for OBS)
+index.html          page shell (editor; ?stage=1 = clean capture page for OBS; &cam=1 = the copy filmed for the virtual camera)
 css/style.css
 js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, default layout and settings, filename routing

@@ -1,6 +1,6 @@
 /* The avatar-switch animation: every part hops, spins and drops off the bottom of the screen,
    then the new avatar's parts climb back up from below, base first, with a little overshoot.
-   Offsets are in stage units (the 1000 x 1000 character space); the renderer applies them. */
+   Offsets are in stage units (the 1920 x 1080 stage); the renderer applies them. */
 (function (PT) {
   const OUT_MS = 650;       // until the last part has left the screen
   const IN_MS = 950;        // until the last part has landed
