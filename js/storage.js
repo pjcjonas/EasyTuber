@@ -146,6 +146,37 @@
         return (await r.json()).results || null;
       } catch (e) { return null; }
     },
+    /* Virtual camera (desktop app only). on = true / false to start / stop, nothing to ask.
+       Returns { on, device, error }, or null where there is no camera. */
+    async vcam(on) {
+      if (!this.server) return null;
+      try {
+        const opts = on === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }) };
+        const r = await fetch('api/vcam', opts);
+        return r.ok ? await r.json() : null;
+      } catch (e) { return null; }
+    },
+
+    /* Actions (desktop app only): tell the server which actions exist, so Streamer.bot requests can be
+       checked and timed. actions = [{ id, label, duration }] */
+    async setActions(actions) {
+      if (!this.server) return false;
+      try {
+        const r = await fetch('api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }) });
+        return r.ok;
+      } catch (e) { return false; }
+    },
+    /* Play a Streamer.bot URL exactly as Streamer.bot would. Throws with the server's reason. */
+    async runActionUrl(url) {
+      const r = await fetch(url, { headers: { 'X-EasyTuber-Control': 'streamerbot' } });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);
+    },
+    // the server's live messages (actions, mic level, ...), for the editor; stage pages use onMessage
+    onLive(fn) {
+      const es = this.events();
+      if (es) es.addEventListener('live', (e) => { try { fn(JSON.parse(e.data)); } catch (err) { /* ignore */ } });
+    },
+
     onHotkey(fn) {
       const es = this.events();
       if (es) es.addEventListener('hotkey', (e) => { try { fn(JSON.parse(e.data).action); } catch (err) { /* ignore */ } });

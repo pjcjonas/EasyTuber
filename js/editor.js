@@ -204,7 +204,7 @@
         b.adj = PT.deepClone(a.adj || {});   // image-space offsets: the flip mirrors them already
         for (const [st, url] of Object.entries(b.images)) await PT.Assets.load(dst, st, url);
         Object.assign(b, {
-          x: PT.STAGE_W - a.x, y: a.y, rot: -a.rot, scale: a.scale, px: a.px, py: a.py,
+          x: PT.CHAR_W - a.x, y: a.y, rot: -a.rot, scale: a.scale, px: a.px, py: a.py,
           flip: PT.Assets.hasUser(dst) ? !a.flip : false, visible: a.visible,
         });
         if (!PT.Assets.hasUser(dst)) { const d = PT.defaultPart(dst); Object.assign(b, { px: d.px, py: d.py }); }

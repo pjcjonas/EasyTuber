@@ -104,6 +104,10 @@
       for (const a of p.avatars) if (a.hotkey) out.push({ accelerator: a.hotkey, action: 'avatar:' + a.id });
       if (p.hotkeys.next) out.push({ accelerator: p.hotkeys.next, action: 'next' });
       if (p.hotkeys.random) out.push({ accelerator: p.hotkeys.random, action: 'random' });
+      // actions: only the ones whose file is loaded
+      for (const [id, a] of Object.entries(p.actions || {})) {
+        if (a.hotkey && PT.Actions && PT.Actions.get(id)) out.push({ accelerator: a.hotkey, action: 'action:' + id });
+      }
       return out;
     },
     async register(bindings = this.bindings()) {
@@ -112,18 +116,22 @@
       this.status = {};
       if (res) for (const r of res) this.status[r.accelerator] = r.ok;
       if (PT.Panels.renderAvatars) PT.Panels.renderAvatars();
+      if (PT.Panels.renderActions) PT.Panels.renderActions();
       return res;
     },
     pause() { return PT.Storage.setHotkeys([]); },   // while capturing a new key
+    // except = what is being set: an avatar, 'next', 'random' or 'action:<id>'
     keyInUse(acc, except) {
       const p = this.project;
       if (p.avatars.some((a) => a.hotkey === acc && a !== except)) return true;
+      if (Object.entries(p.actions || {}).some(([id, a]) => a.hotkey === acc && except !== 'action:' + id)) return true;
       return ['next', 'random'].some((k) => k !== except && p.hotkeys[k] === acc);
     },
 
     handle(action) {
       if (action === 'next' || action === RANDOM) return this.switchTo(action);
       if (action.startsWith('avatar:')) return this.switchTo(action.slice(7));
+      if (action.startsWith('action:')) return PT.App.playAction(action.slice(7));
     },
 
     /* ---- switching ---- */
@@ -216,7 +224,11 @@
     rename(a, name) { a.name = (name || '').trim().slice(0, 60) || a.name; this.app.changed({ settings: true }); },
     async setHotkey(a, acc) {
       if (a === 'next' || a === 'random') this.project.hotkeys[a] = acc;
-      else a.hotkey = acc;
+      else if (typeof a === 'string' && a.startsWith('action:')) {
+        const id = a.slice(7), all = this.project.actions;
+        all[id] = all[id] || { hotkey: '', settings: {} };
+        all[id].hotkey = acc;
+      } else a.hotkey = acc;
       this.app.changed({ settings: true });
       await this.register();
     },
