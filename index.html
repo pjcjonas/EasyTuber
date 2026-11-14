@@ -33,22 +33,47 @@
   </header>
 
   <main class="layout">
-    <!-- ============ LEFT: PARTS ============ -->
-    <aside class="panel left ui-only">
-      <div id="dropAll" class="dropzone" tabindex="0">
-        <strong>Drop all your layers here</strong>
-        <span>Files are sorted by name, e.g. <code>torso.png</code>, <code>eyes_closed.png</code>, <code>arm_l_upper.png</code>. A Photoshop <code>.psd</code> works too.</span>
-        <input id="dropAllInput" type="file" accept="image/*,.psd" multiple hidden>
-      </div>
-      <div id="partList" class="part-list"></div>
-    </aside>
-
-    <!-- ============ CENTER: STAGE ============ -->
     <section class="center">
-      <div id="stageWrap" class="stage-wrap">
-        <canvas id="stage"></canvas>
-        <div id="stageHint" class="stage-hint ui-only"></div>
-        <button id="clickToStart" class="click-to-start" hidden>Click to start microphone</button>
+      <!-- the stage fills this; the two panels float over it (see js/layout.js) -->
+      <div class="stage-area">
+        <div id="stageWrap" class="stage-wrap">
+          <canvas id="stage"></canvas>
+          <div id="stageHint" class="stage-hint ui-only"></div>
+          <button id="clickToStart" class="click-to-start" hidden>Click to start microphone</button>
+        </div>
+
+        <!-- ============ LEFT: PARTS ============ -->
+        <aside class="panel left ui-only">
+          <div class="panel-body">
+            <div id="dropAll" class="dropzone" tabindex="0">
+              <strong>Drop all your layers here</strong>
+              <span>Files are sorted by name, e.g. <code>torso.png</code>, <code>eyes_closed.png</code>, <code>arm_l_upper.png</code>. A Photoshop <code>.psd</code> works too.</span>
+              <input id="dropAllInput" type="file" accept="image/*,.psd" multiple hidden>
+            </div>
+            <div id="partList" class="part-list"></div>
+          </div>
+          <button id="toggleLeft" class="panel-toggle" aria-label="Show or hide the parts panel">‹</button>
+        </aside>
+
+        <!-- ============ RIGHT: INSPECTOR / SETTINGS ============ -->
+        <aside class="panel right ui-only">
+          <div id="gripRight" class="panel-grip" title="Drag to make the panel wider or narrower. Double-click: usual width"></div>
+          <nav class="tabs" role="tablist">
+            <button class="tab active" data-tab="part">Part</button>
+            <button class="tab" data-tab="motion">Motion</button>
+            <button class="tab" data-tab="mic">Mic</button>
+            <button class="tab" data-tab="stageTab">Stage</button>
+            <button class="tab" data-tab="avatars">Avatars</button>
+            <button class="tab" data-tab="actions">Actions</button>
+          </nav>
+          <div class="tab-body" id="tab-part"></div>
+          <div class="tab-body" id="tab-motion" hidden></div>
+          <div class="tab-body" id="tab-mic" hidden></div>
+          <div class="tab-body" id="tab-stageTab" hidden></div>
+          <div class="tab-body" id="tab-avatars" hidden></div>
+          <div class="tab-body" id="tab-actions" hidden></div>
+          <button id="toggleRight" class="panel-toggle" aria-label="Show or hide the settings panel">›</button>
+        </aside>
       </div>
       <div class="meter-row ui-only">
         <button id="btnMic" class="btn mic-btn" title="Start/stop microphone">🎤 Start mic</button>
@@ -64,24 +89,6 @@
         <button id="btnTalkTest" class="btn ghost" title="Hold to fake talking (or hold Space)">Hold to test talk</button>
       </div>
     </section>
-
-    <!-- ============ RIGHT: INSPECTOR / SETTINGS ============ -->
-    <aside class="panel right ui-only">
-      <nav class="tabs" role="tablist">
-        <button class="tab active" data-tab="part">Part</button>
-        <button class="tab" data-tab="motion">Motion</button>
-        <button class="tab" data-tab="mic">Mic</button>
-        <button class="tab" data-tab="stageTab">Stage</button>
-        <button class="tab" data-tab="avatars">Avatars</button>
-        <button class="tab" data-tab="actions">Actions</button>
-      </nav>
-      <div class="tab-body" id="tab-part"></div>
-      <div class="tab-body" id="tab-motion" hidden></div>
-      <div class="tab-body" id="tab-mic" hidden></div>
-      <div class="tab-body" id="tab-stageTab" hidden></div>
-      <div class="tab-body" id="tab-avatars" hidden></div>
-      <div class="tab-body" id="tab-actions" hidden></div>
-    </aside>
   </main>
 
   <div id="intro" class="intro" hidden>
@@ -110,6 +117,7 @@
   <script src="js/sheet.js"></script>
   <script src="js/psd.js"></script>
   <script src="js/library.js"></script>
+  <script src="js/layout.js"></script>
   <script src="js/avatars.js"></script>
   <script src="js/panels.js"></script>
   <script src="js/app.js"></script>

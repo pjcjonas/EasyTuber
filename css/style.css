@@ -55,12 +55,40 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: v
 .seg-btn { border: 0; background: transparent; padding: 5px 16px; border-radius: 6px; cursor: pointer; color: var(--muted); }
 .seg-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
 
-/* ---------- layout ---------- */
-.layout { display: grid; grid-template-columns: 290px 1fr 330px; height: calc(100% - 52px); }
-.panel { background: var(--panel); overflow-y: auto; }
-.panel.left { border-right: 1px solid var(--line); padding: 12px; }
-.panel.right { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
-.center { display: flex; flex-direction: column; min-width: 0; }
+/* ---------- layout: the stage fills the window, the panels float over it ---------- */
+.layout { height: calc(100% - 52px); }
+.center { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.stage-area { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.stage-area > .stage-wrap { position: absolute; inset: 0; }
+.panel {
+  position: absolute; top: 10px; bottom: 10px; z-index: 5;
+  background: rgba(12, 11, 16, .94); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.55);
+}
+body.panels-ready .panel { transition: transform .25s ease, opacity .25s ease; }
+body.resizing .panel { transition: none; }
+body.resizing, body.resizing * { cursor: ew-resize !important; user-select: none; }
+.panel.left { left: 10px; width: 290px; }
+.panel.right { right: 10px; width: 340px; display: flex; flex-direction: column; }
+.panel.left.collapsed { transform: translateX(calc(-100% - 10px)); }
+.panel.right.collapsed { transform: translateX(calc(100% + 10px)); }
+.panel-body { height: 100%; overflow-y: auto; padding: 12px; border-radius: 12px; }
+.panel.right .tabs, .panel.right .tab-body { min-width: 0; }
+/* the tab that slides a panel away and back: it sits outside the panel's edge, so it stays on screen */
+.panel-toggle {
+  position: absolute; top: 50%; width: 22px; height: 64px; margin-top: -32px; z-index: 6;
+  border: 1px solid var(--line); background: rgba(20, 19, 24, .96); color: var(--text);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 0;
+}
+.panel-toggle:hover { border-color: var(--accent); color: var(--accent-2); }
+.panel.left .panel-toggle { right: -23px; border-radius: 0 9px 9px 0; border-left: 0; }
+.panel.right .panel-toggle { left: -23px; border-radius: 9px 0 0 9px; border-right: 0; }
+.panel.collapsed .panel-toggle { box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+/* the right panel's resize edge */
+.panel-grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 7; }
+.panel-grip::after { content: ""; position: absolute; left: 3px; top: 50%; height: 40px; margin-top: 40px; width: 2px; border-radius: 2px; background: var(--line); }
+.panel-grip:hover::after, body.resizing .panel-grip::after { background: var(--accent); top: 0; bottom: 0; height: auto; margin-top: 0; }
+.panel.right.collapsed .panel-grip { display: none; }
 
 /* ---------- drop zone + part list ---------- */
 .dropzone {
@@ -71,7 +99,10 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: v
 .dropzone strong { color: var(--text); }
 .dropzone:hover, .dropzone.over { border-color: var(--accent); background: rgba(139,123,255,.08); }
 
-.group-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 4px 6px; }
+.group-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text); font-weight: 700;
+  margin: 14px 0 6px; padding: 6px 8px; border-left: 3px solid var(--accent); background: rgba(139, 123, 255, .08); border-radius: 0 6px 6px 0;
+}
 .part-row {
   display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 9px;
   cursor: pointer; border: 1px solid transparent;
@@ -137,16 +168,25 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: v
 .chip.hot { background: rgba(79,209,165,.2); color: var(--good); }
 
 /* ---------- right panel ---------- */
-.tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); flex: none; flex-wrap: wrap; }
 .tab {
   flex: 1; border: 0; background: transparent; padding: 11px 4px; cursor: pointer; color: var(--muted);
   border-bottom: 2px solid transparent;
 }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.tab-body { padding: 14px; overflow-y: auto; flex: 1; }
+.tab-body { padding: 12px; overflow-y: auto; flex: 1; border-radius: 0 0 12px 12px; }
 
-.section { margin-bottom: 18px; }
-.section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+/* each section is a card of its own, so where one ends and the next begins is plain to see */
+.section {
+  margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(255, 255, 255, .025);
+}
+.section:last-child { margin-bottom: 0; }
+.section h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text); margin: -12px -12px 10px;
+  padding: 9px 12px; font-weight: 700; border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0;
+  background: rgba(139, 123, 255, .08); border-left: 3px solid var(--accent);
+}
 .section p.note { color: var(--muted); margin: 0 0 8px; font-size: 12px; }
 .title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .title-row h2 { margin: 0; font-size: 16px; }
@@ -334,7 +374,7 @@ select {
 /* ---------- stage-only window (for OBS capture) ---------- */
 body.stage-mode .ui-only { display: none !important; }
 body.stage-mode .layout { display: block; height: 100%; }
-body.stage-mode .center, body.stage-mode .stage-wrap { height: 100%; }
+body.stage-mode .center, body.stage-mode .stage-wrap, body.stage-mode .stage-area { height: 100%; }
 body.stage-mode .stage-wrap { background: transparent; }
 body.stage-mode { background: transparent; }
 
