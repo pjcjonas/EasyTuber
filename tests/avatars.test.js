@@ -119,3 +119,32 @@ test('every accelerator the editor can produce passes the server check', () => {
     }
   }
 });
+
+test('compose builds a look from chosen avatars, group by group', () => {
+  const looks = [lookWith('A'), lookWith('B'), lookWith('C')];
+  const groups = PT.Avatars.MIX_GROUPS;
+  const picks = groups.map((g, i) => i % 3);
+  const look = PT.Avatars.compose(looks, picks, looks[1]);
+  groups.forEach((group, i) => { for (const id of group) assert.equal(look.parts[id].images.main, `data:${'ABC'[picks[i]]}-${id}`, id); });
+  assert.equal(Object.keys(look.parts).length, 11);
+  assert.equal(look.order.join(), looks[1].order.join());             // the base's draw order
+  look.parts.face.x = -1; look.order.pop();
+  assert.notEqual(looks[picks[groups.findIndex((g) => g[0] === 'face')]].parts.face.x, -1);   // copies, not the avatars' own parts
+  assert.equal(looks[1].order.length, 11);
+  // a random mix is the same thing with random picks
+  const m = PT.Avatars.mix(looks, () => 0.5, looks[0]);
+  assert.deepEqual(plain(m.look), plain(PT.Avatars.compose(looks, m.picks, looks[0])));
+  // a pick that points nowhere falls back to the first avatar
+  assert.equal(PT.Avatars.compose(looks, [], looks[0]).parts.face.images.main, 'data:A-face');
+  assert.equal(PT.Avatars.groupLabel(['armLUpper', 'armLLower']), 'Left arm');
+  assert.equal(PT.Avatars.groupLabel(['hairFront']), 'Hair (front)');
+});
+
+test('what a mix was made from is kept only while a mix is on screen', () => {
+  const avatars = [{ id: 'a', name: 'A', look: lookWith('A') }, { id: 'b', name: 'B', look: lookWith('B') }];
+  const mixed = PT.normalizeProject({ parts: {}, avatars: plain(avatars), activeAvatar: 'random', mix: { face: 'b', torso: 'a', eyes: 'gone', nonsense: 'a', mouth: 7 } });
+  assert.deepEqual(plain(mixed.mix), { face: 'b', torso: 'a' });      // unknown avatars and parts dropped
+  const plainOne = PT.normalizeProject({ parts: {}, avatars: plain(avatars), activeAvatar: 'a', mix: { face: 'b' } });
+  assert.equal(plainOne.mix, null);
+  assert.equal(PT.normalizeProject({}).mix, null);
+});

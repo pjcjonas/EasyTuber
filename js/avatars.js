@@ -67,27 +67,36 @@
   }
   function blankLook() { const d = PT.defaultProject(); return takeLook(d); }
 
-  /* A random mix: each part group comes from a random avatar that has art for it.
-     looks = the avatars' looks; rng = () => [0, 1); base = whose draw order and placement to keep.
-     Returns { look (deep copies), picks: the index into looks each group came from }. */
-  function mix(looks, rng = Math.random, base = looks[0]) {
+  // what a group is called in lists: "Left arm" for the two arm pieces, else the part's name
+  const groupLabel = (group) => { const d = PT.PART[group[0]]; return group.length > 1 ? d.group : d.label; };
+  // one group's parts, copied from a look (a look from before a part existed gives an empty part)
+  const groupParts = (look, group) => Object.fromEntries(group.map((id) => [id, look.parts[id] ? clone(look.parts[id]) : PT.defaultPart(id)]));
+
+  /* A look put together from chosen avatars: picks[i] = which of looks group i comes from.
+     base = whose draw order and placement of the whole character to keep. Deep copies. */
+  function compose(looks, picks, base = looks[0]) {
     const look = { parts: {}, order: clone(base.order), root: clone(base.root), sheets: [] };
-    const picks = [];
-    for (const group of mixGroups()) {
+    mixGroups().forEach((group, i) => Object.assign(look.parts, groupParts(looks[picks[i]] || looks[0], group)));
+    return look;
+  }
+
+  /* A random mix: each part group comes from a random avatar that has art for it.
+     looks = the avatars' looks; rng = () => [0, 1); base as in compose.
+     Returns { look, picks: the index into looks each group came from }. */
+  function mix(looks, rng = Math.random, base = looks[0]) {
+    const picks = mixGroups().map((group) => {
       const withArt = looks.filter((l) => hasArt(l, group[0]));
       const pool = withArt.length ? withArt : looks;
-      const src = pool[Math.floor(rng() * pool.length) % pool.length];
-      picks.push(looks.indexOf(src));
-      for (const id of group) look.parts[id] = src.parts[id] ? clone(src.parts[id]) : PT.defaultPart(id);   // a look from before the part existed
-    }
-    return { look, picks };
+      return looks.indexOf(pool[Math.floor(rng() * pool.length) % pool.length]);
+    });
+    return { look: compose(looks, picks, base), picks };
   }
 
   /* ---------------- the controller (editor window) ---------------- */
   const Avatars = {
     RANDOM, mixGroups,
     get MIX_GROUPS() { return mixGroups(); },
-    acceleratorFromEvent, prettyKey, takeLook, putLook, blankLook, mix, hasArt,
+    acceleratorFromEvent, prettyKey, takeLook, putLook, blankLook, mix, compose, hasArt, groupLabel,
     status: {},          // accelerator -> registered with the system?
     supported: false,    // global hotkeys available (the desktop app)
     busy: false, queued: null,
@@ -176,7 +185,8 @@
           }
           look = m.look;
           this.lastPicks = m.picks;
-        }
+          p.mix = Object.fromEntries(mixGroups().map((g, i) => [g[0], p.avatars[m.picks[i]].id]));
+        } else p.mix = null;
         const cur = this.active();
         if (cur) cur.look = takeLook(p);                // a random mix on screen is simply dropped
         if (id !== RANDOM) { const next = p.avatars.find((a) => a.id === id); look = next.look || blankLook(); next.look = null; }
@@ -191,6 +201,56 @@
         this.busy = false;
       }
       if (this.queued) { const q = this.queued; this.queued = null; this.switchTo(q); }
+    },
+
+    /* ---- building a mix by hand, and copying one part between avatars ---- */
+    groupOf(partId) { return mixGroups().find((g) => g.includes(partId)) || null; },
+    // which avatar a group on screen came from: the avatar itself, or what the mix says ('' = not known)
+    sourceOf(group) {
+      const p = this.project;
+      const id = p.activeAvatar !== RANDOM ? p.activeAvatar : (p.mix && p.mix[group[0]]) || '';
+      return p.avatars.some((a) => a.id === id) ? id : '';   // an avatar deleted since: not known any more
+    },
+
+    /* Take one group (a part; both pieces of an arm) from an avatar and show the result.
+       From an avatar this starts a mix: the avatar itself is left as it was, and the mix on screen
+       belongs to no avatar until "Keep this mix". In a mix it changes that one group. */
+    async buildMix(partId, avatarId) {
+      const p = this.project, group = this.groupOf(partId), src = p.avatars.find((a) => a.id === avatarId);
+      if (!group || !src || this.busy) return false;
+      if (p.avatars.length < 2) { PT.toast('Add a second avatar to mix them.', 'warn', 5000); return false; }
+      this.busy = true;
+      try {
+        const cur = this.active();
+        if (cur) {
+          // the avatar keeps its look; what is on screen becomes a copy of it
+          cur.look = takeLook(p);
+          putLook(p, clone(cur.look));
+          p.mix = Object.fromEntries(mixGroups().map((g) => [g[0], cur.id]));
+          p.activeAvatar = RANDOM;
+        }
+        Object.assign(p.parts, groupParts(src.look || blankLook(), group));
+        p.mix = { ...(p.mix || {}), [group[0]]: src.id };
+        await PT.Assets.loadProject(p);
+        this.app.afterLookChange();
+        PT.Storage.save(p);
+      } finally { this.busy = false; }
+      return true;
+    },
+
+    /* Replace one group of the avatar on screen with another avatar's, for good. */
+    async copyGroup(partId, avatarId) {
+      const p = this.project, group = this.groupOf(partId), src = p.avatars.find((a) => a.id === avatarId);
+      if (!group || !src || !src.look || this.busy) return false;
+      if (p.activeAvatar === RANDOM) return this.buildMix(partId, avatarId);
+      this.busy = true;
+      try {
+        Object.assign(p.parts, groupParts(src.look, group));
+        await PT.Assets.loadProject(p);
+        PT.Editor.resetHistory();
+        this.app.changed({ structure: true });
+      } finally { this.busy = false; }
+      return true;
     },
 
     /* ---- managing the list ---- */
@@ -212,6 +272,7 @@
       if (p.activeAvatar !== RANDOM) return;
       const a = this.add(`Mix ${p.avatars.length + 1}`, null);
       p.activeAvatar = a.id;
+      p.mix = null;
       this.app.changed({ settings: true });
       PT.Panels.renderAvatars();
       PT.toast(`Saved the mix as "${a.name}".`);

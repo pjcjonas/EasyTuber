@@ -274,6 +274,8 @@ Open the **Avatars** tab:
 * **Show** puts an avatar on screen. Rename an avatar by typing in its name box. Everything you edit (images, positions, joints, draw order) belongs to the avatar on screen. Motion, mic and stage settings are shared by all of them.
 * **Set key**, then press the combination you want, such as **Ctrl+Alt+1**. Esc cancels; Backspace removes the key. A key needs Ctrl, Alt or Shift with it, except F-keys and numpad keys, which can be used alone. That's so your normal typing keeps working everywhere.
 * **Random mix** builds a new look from your avatars: each part comes from a random avatar (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as an avatar. Mixing works best when your avatars were drawn on the same canvas, in the same pose.
+* **Build a mix** lets you choose instead of leaving it to chance: one row per part, each with the avatar it comes from. Change a row and the stage and OBS show the result straight away. Your avatars are not changed. **Save as avatar** keeps the mix as a new avatar.
+* **Copy a part from another avatar.** Select a part, and in the **Part** tab under **Tools** choose **Copy … from…**. That part of the avatar on screen is replaced by the other avatar's image and placement.
 * **Next avatar** steps through your avatars in order with one key.
 * **Switch animation** turns the drop-out / climb-in effect on or off. **Test the animation** plays it here and in OBS.
 

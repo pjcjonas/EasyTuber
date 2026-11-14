@@ -124,6 +124,48 @@
         }, '＋ Add part')));
     },
 
+    // One row per part group: which avatar it comes from. Changing one shows the result on the stage.
+    mixBuilder() {
+      const A = PT.Avatars, p = this.project;
+      if (p.avatars.length < 2) return this.note('Add a second avatar, then choose here which avatar each part comes from.');
+      const looks = A.looks(), random = p.activeAvatar === A.RANDOM;
+      const wrap = el('div', {},
+        this.note('Choose which avatar each part comes from. The stage and OBS show the result straight away. Your avatars are not changed.'));
+      for (const group of A.MIX_GROUPS) {
+        const from = A.sourceOf(group);
+        const sel = el('select', { 'aria-label': A.groupLabel(group) + ' comes from' },
+          from ? null : el('option', { value: '' }, '—'),
+          ...p.avatars.map((a, i) => el('option', { value: a.id }, a.name + (A.hasArt(looks[i], group[0]) ? '' : ' (no image)'))));
+        sel.value = from;
+        sel.addEventListener('change', async () => { if (sel.value) { await A.buildMix(group[0], sel.value); this.renderAvatars(); } });
+        wrap.append(el('div', { class: 'mix-row', 'data-group': group[0] }, el('span', { class: 'mix-label' }, A.groupLabel(group)), sel));
+      }
+      wrap.append(el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', { class: 'btn', disabled: !random, title: random ? 'Keep the mix on screen as a new avatar' : 'Change a part above first', onclick: () => A.keepMix() }, 'Save as avatar')));
+      return wrap;
+    },
+
+    // "Copy from another avatar" for the selected part (both pieces of an arm go together)
+    copyFromAvatar(id) {
+      const A = PT.Avatars, p = this.project, group = A.groupOf(id);
+      if (!group || p.avatars.length < 2) return null;
+      const looks = A.looks();
+      const others = p.avatars.map((a, i) => ({ a, has: A.hasArt(looks[i], group[0]) })).filter((x) => x.a.id !== p.activeAvatar && x.has);
+      if (!others.length) return null;
+      const what = A.groupLabel(group);
+      const sel = el('select', { 'aria-label': 'Copy from another avatar', title: `Replace this avatar's ${what} with another avatar's` },
+        el('option', { value: '' }, `Copy ${what} from…`),
+        ...others.map((x) => el('option', { value: x.a.id }, x.a.name)));
+      sel.addEventListener('change', async () => {
+        const src = p.avatars.find((a) => a.id === sel.value);
+        sel.value = '';
+        if (!src) return;
+        if (A.active() && !confirm(`Replace the ${what} of "${A.activeName()}" with the one from "${src.name}"?`)) return;
+        if (await A.copyGroup(id, src.id)) PT.toast(`Copied ${what} from "${src.name}".`);
+      });
+      return el('div', { class: 'row', style: { marginTop: '6px' } }, sel);
+    },
+
     // Name, parent, sway and Delete for one of the user's own parts
     customPartBox(id) {
       const app = this.app, def = PT.PART[id], list = this.project.customParts;
@@ -273,7 +315,8 @@
                 app.changed({ transform: true });
               },
             }, 'Auto-place'),
-            id.startsWith('arm') ? el('button', { class: 'btn', title: 'Copy this arm (both segments) to the other side, mirrored', onclick: () => PT.Editor.mirrorArm(id) }, 'Mirror to other arm') : null)),
+            id.startsWith('arm') ? el('button', { class: 'btn', title: 'Copy this arm (both segments) to the other side, mirrored', onclick: () => PT.Editor.mirrorArm(id) }, 'Mirror to other arm') : null),
+          this.copyFromAvatar(id)),
       );
       mark();
     },
@@ -674,6 +717,7 @@
           el('div', { class: 'row', style: { marginTop: '8px' } },
             el('button', { class: 'btn', onclick: () => A.switchTo(A.RANDOM) }, '🎲 Mix now'),
             random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new avatar', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
+        this.section('Build a mix', this.mixBuilder()),
         this.section('Next avatar',
           this.note('Steps through your avatars in order.'),
           this.hotkeyRow('next', p.hotkeys.next)),
