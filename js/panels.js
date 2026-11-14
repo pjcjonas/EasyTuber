@@ -636,6 +636,9 @@
           el('button', { class: 'icon-btn', title: 'Send back', onclick: () => mv(-1), disabled: i === 0 }, '↓')));
       }
 
+      const outlineIn = el('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(st.outlineColor) ? st.outlineColor : '#ffffff', title: 'Outline colour', 'aria-label': 'Outline colour', class: 'swatch', style: { padding: 0, flex: 'none' } });
+      outlineIn.addEventListener('input', () => { st.outlineColor = outlineIn.value; app.changed({ settings: true }); });
+
       host.innerHTML = '';
       host.append(
         this.section('Background', sw, this.note('Used by the stage window. Transparent shows a checkerboard here.')),
@@ -648,6 +651,16 @@
         PT.Storage.server ? this.section('Updates', this.versionLine(),
           this.check('Tell me when a new version is out', () => st.updateNotice !== false, (v) => { st.updateNotice = v; app.changed({ settings: true }); },
             'Asks github.com once when the app starts. Nothing about you or your avatar is sent.')) : '',
+        this.section('Look on stream',
+          this.note('Shown in Live, the stage window and OBS, not while you edit.'),
+          this.field('Dim when quiet', { min: 0, max: 100, suffix: '%', get: () => st.dimSilent || 0, set: (v) => { st.dimSilent = v; app.changed({ settings: true }); },
+            title: 'How much darker the avatar gets while you are not talking. 0 = never.' }),
+          this.field('Outline', { min: 0, max: 20, step: 0.5, get: () => st.outlineWidth || 0, set: (v) => { st.outlineWidth = v; app.changed({ settings: true }); },
+            title: 'A sticker outline around the whole avatar. 0 = none.' }),
+          el('div', { class: 'row', style: { alignItems: 'center', margin: '2px 0 6px' } },
+            el('span', { class: 'note', style: { margin: 0 } }, 'Outline colour'), outlineIn),
+          this.field('Shadow', { min: 0, max: 100, suffix: '%', get: () => st.shadow || 0, set: (v) => { st.shadow = v; app.changed({ settings: true }); },
+            title: 'A soft shadow behind the avatar. 0 = none.' })),
         this.section('Sprite sheets', this.sheetList()),
         this.section('Draw order (top = front)', list),
         this.section('Streaming with OBS', this.obsUrl(), el('ol', { class: 'help-list' },

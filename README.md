@@ -387,6 +387,16 @@ EASY-TUBER can show your avatar as a camera, so any program that takes a webcam 
 
 The camera picture is 1920 × 1080 at 30 frames a second. A camera can't be transparent: the Stage background colour is used, and **Transparent** shows black. The microphone, blinking, motion and avatar hotkeys all work the same as on the stage. Only one program can send to the camera at a time, so stop OBS's own virtual camera first.
 
+### Look on stream
+
+In the **Stage** tab under **Look on stream**:
+
+* **Dim when quiet** darkens the avatar while you are not talking and brings it back to full brightness as soon as you speak. 0 turns it off.
+* **Outline** draws a sticker outline around the whole avatar, in the **Outline colour** you pick. 0 turns it off.
+* **Shadow** puts a soft shadow behind the avatar. 0 turns it off.
+
+They show in Live, the stage window, OBS and the virtual camera, not while you edit.
+
 The **Stage** tab also has the editor options (placeholder art, joints and bones, dragging attached parts, onion skin), your saved sprite sheets, and the full **draw order** list.
 
 ---

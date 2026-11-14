@@ -166,6 +166,26 @@
     actionSound: 'editor',  // where action sounds play: editor | obs (the stage pages) | off
     actionVolume: 100,      // 0..100, for every action sound
     updateNotice: true,     // ask GitHub at start-up whether a newer version is out
+    // how the avatar looks in Live, the stage window and OBS (not while editing)
+    dimSilent: 0,           // 0..100: how much darker the avatar is while you are quiet
+    outlineWidth: 0,        // 0..20 stage units: a sticker outline around the whole avatar (0 = none)
+    outlineColor: '#ffffff',
+    shadow: 0,              // 0..100: strength of a soft shadow behind the avatar
+  };
+
+  /* The stage effects to draw this frame, or null when there are none (and always while editing).
+     vol = the animator's smoothed "how much am I talking" (0..1): any talking at all is full brightness. */
+  PT.stageFx = (stage, vol, editing) => {
+    if (editing || !stage) return null;
+    const num = (v, max) => (Number.isFinite(+v) ? Math.max(0, Math.min(max, +v)) : 0);
+    const quiet = 1 - Math.max(0, Math.min(1, (Number.isFinite(vol) ? vol : 0) / 0.3));
+    const fx = {
+      dim: num(stage.dimSilent, 100) / 100 * quiet,
+      outline: num(stage.outlineWidth, 20),
+      outlineColor: /^#[0-9a-f]{6}$/i.test(stage.outlineColor) ? stage.outlineColor : '#ffffff',
+      shadow: num(stage.shadow, 100) / 100,
+    };
+    return fx.dim > 0.004 || fx.outline > 0 || fx.shadow > 0 ? fx : null;
   };
 
   PT.MAX_EXPRESSIONS = 20;

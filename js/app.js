@@ -585,13 +585,13 @@
       if (showAct) PT.Actions.draw('behind', R);
       const switching = PT.Transition.active;
       const actFx = showAct && PT.Actions.hasPartFx;
-      R.drawRig(p, pose, editing ? this.previewStates : showAct ? { ...liveStates, ...act.states } : liveStates, {
+      R.drawRigFx(p, pose, editing ? this.previewStates : showAct ? { ...liveStates, ...act.states } : liveStates, {
         dimPlaceholders: editing,
         onionPart: editing && p.stage.onion ? this.selected : null,
         fx: switching || actFx
           ? (id, t) => PT.Actions.combineFx(switching ? PT.Transition.fx(id, t) : null, actFx ? PT.Actions.partFx(id) : null)
           : null,
-      });
+      }, PT.stageFx(p.stage, anim.vol, editing));
       if (showAct) PT.Actions.draw('front', R);
       if (editing && !switching) PT.Editor.drawOverlay(pose);
       if (!this.stageMode) this.updateMeter(anim);
