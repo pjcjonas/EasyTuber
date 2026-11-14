@@ -110,6 +110,25 @@
       });
     },
 
+    /* The project's saved sequences, the way the server wants them: times in ms, values as an object. */
+    savedSequences(project) {
+      return ((project && project.sequences) || []).map((s) => {
+        const out = { id: s.id, steps: s.steps.slice() };
+        if (s.startDelay) out.startDelay = Math.round(s.startDelay * 1000);
+        if (s.delay) out.delay = Math.round(s.delay * 1000);
+        const args = {};
+        for (const pair of (s.values || '').split('&')) {
+          const i = pair.indexOf('='), key = i < 0 ? pair : pair.slice(0, i);
+          if (!ID.test(key) || key in args) continue;
+          let value = i < 0 ? '' : pair.slice(i + 1);
+          try { value = decodeURIComponent(value.replace(/\+/g, ' ')); } catch (e) { /* keep it as typed */ }
+          args[key] = value.slice(0, 200);
+        }
+        if (Object.keys(args).length) out.args = args;
+        return out;
+      });
+    },
+
     /* Load every action file the server lists: the app's js/actions/ first, then the user's actions
        folder, so a user file can replace one of the app's. files = [{ src, from }].
        Returns { loaded, failed: [{ src, message }] }. A file that fails is skipped; the rest still load. */

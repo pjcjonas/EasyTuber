@@ -659,6 +659,53 @@
         el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), cooldown, ...settings));
     },
 
+    // sequences kept from the builder: play, rename, hotkey, a short Streamer.bot address, delete
+    savedSequences(defs) {
+      const p = this.project, app = this.app;
+      if (!p.sequences.length) return document.createDocumentFragment();   // nothing to show
+      const labels = new Map([
+        ...defs.map((d) => [d.id, d.label]), ['next', 'Next avatar'], ['random', 'Random mix'],
+        ...p.avatars.map((a) => ['avatar:' + a.id, 'Show ' + a.name]),
+      ]);
+      const address = (s) => {
+        const u = new URL('/api/streamerbot', location.origin);
+        u.hostname = '127.0.0.1';
+        u.searchParams.set('run', s.id);
+        return u;
+      };
+      const rows = p.sequences.map((s) => {
+        const missing = s.steps.filter((n) => !labels.has(n));
+        const name = el('input', { type: 'text', class: 'av-name', value: s.name, maxlength: 60, 'aria-label': 'Sequence name' });
+        name.addEventListener('change', () => { s.name = name.value.trim().slice(0, 60) || s.name; name.value = s.name; app.changed({ settings: true }); });
+        const timing = [s.startDelay ? `starts after ${s.startDelay} s` : '', s.delay ? `${s.delay} s between steps` : '', s.values ? 'values: ' + s.values : ''].filter(Boolean).join(' · ');
+        return el('div', { class: 'avatar-row action-row', 'data-sequence': s.id },
+          el('div', { class: 'av-top' }, name,
+            el('button', { class: 'btn small', disabled: missing.length > 0, title: 'Play it here, in the stage window and in OBS', onclick: async () => {
+              const u = new URL('api/streamerbot', location.href);
+              u.searchParams.set('run', s.id);
+              u.searchParams.set('force', '1');
+              if (app.mode === 'edit') app.setMode('live');
+              try { await PT.Storage.runActionUrl(u); } catch (e) { PT.toast('Could not run it: ' + e.message, 'error'); }
+            } }, '▶ Play'),
+            el('button', { class: 'icon-btn', title: 'Delete this sequence', onclick: async () => {
+              p.sequences.splice(p.sequences.indexOf(s), 1);
+              app.changed({ settings: true });
+              await PT.Avatars.register();     // its hotkey goes too (this redraws the tab)
+              app.sendCatalog();
+            } }, '✕')),
+          el('p', { class: 'note' }, s.steps.map((n) => labels.get(n) || n).join(' → ') + (timing ? ` (${timing})` : '')),
+          missing.length ? el('p', { class: 'note warn-text' }, 'Missing: ' + missing.join(', ') + '. Put the action or avatar back, or delete this sequence.') : null,
+          el('div', { class: 'av-bottom' }, this.hotkeyRow('sequence:' + s.id, s.hotkey),
+            el('button', { class: 'btn small', title: address(s).href, onclick: async () => {
+              try { await navigator.clipboard.writeText(address(s).href); } catch (e) { /* no clipboard */ }
+              PT.toast('Streamer.bot URL copied');
+            } }, 'Copy address')));
+      });
+      return this.section('Saved sequences',
+        el('div', { class: 'avatar-list' }, ...rows),
+        this.note('The address plays the sequence with its own timing and values. Add the same X-EasyTuber-Control header in Streamer.bot.'));
+    },
+
     // a held action was turned on or off (here, by a hotkey or by Streamer.bot): relabel its button
     syncHeld() {
       for (const b of document.querySelectorAll('#tab-actions button[data-held]')) {
@@ -753,7 +800,20 @@
       const testOne = el('button', { class: 'btn small', onclick: () => test(false) }, '▶ Test');
       const testSeq = el('button', { class: 'btn small', onclick: () => test(true) }, '▶ Test sequence');
       const clear = el('button', { class: 'btn small', onclick: () => { seq.length = 0; update(); } }, 'Clear');
-      const seqRow = el('div', { class: 'row' }, testSeq, clear);
+      // keep the sequence: it gets a name, a hotkey and a short address of its own
+      const saveSeq = el('button', { class: 'btn small', title: 'Keep this sequence, with its timing and values, under Saved sequences', onclick: async () => {
+        const num = (f) => (f.input.value === '' ? null : f.input.valueAsNumber);
+        p.sequences.push({
+          id: 's' + Date.now().toString(36), name: 'Sequence ' + (p.sequences.length + 1), steps: seq.slice(),
+          startDelay: num(fields[0]), delay: num(fields[1]), values: valuesText(), hotkey: '',
+        });
+        seq.length = 0;
+        this.app.changed({ settings: true });
+        await this.app.sendCatalogNow();
+        this.renderActions();
+        PT.toast('Sequence saved. Give it a name and a hotkey under Saved sequences.');
+      } }, 'Save sequence');
+      const seqRow = el('div', { class: 'row' }, testSeq, saveSeq, clear);
 
       const update = () => {
         const has = seq.length > 0;
@@ -768,6 +828,7 @@
         const badTiming = has && fields.some((f) => !f.input.validity.valid), invalid = badTiming || !valuesOk();
         url.value = invalid ? '' : build(has);
         copy.disabled = testSeq.disabled = testOne.disabled = invalid;
+        saveSeq.disabled = invalid || p.sequences.length >= 50;
         add.disabled = seq.length >= 8;
         list.hidden = seqRow.hidden = timingBox.hidden = !has;
         bad.hidden = !badTiming;
@@ -835,6 +896,7 @@
         this.actionSounds(),
         server ? this.streamerBot(defs)
           : this.section('Streamer.bot', this.note('Hotkeys and Streamer.bot work in the EASY-TUBER desktop app.')),
+        server ? this.savedSequences(defs) : document.createDocumentFragment(),
       );
       for (let i = before; i < this.syncers.length; i++) this.syncers[i].actionsTab = true;
     },

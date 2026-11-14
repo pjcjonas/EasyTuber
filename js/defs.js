@@ -121,6 +121,9 @@
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
     actions: {},                         // { [actionId]: { hotkey, settings: { key: value }, cooldown } }
+    // sequences saved in the Actions tab: [{ id, name, steps, startDelay, delay, values, hotkey }]
+    // steps: action ids, 'next', 'random' or 'avatar:<id>'. Times in seconds, null = none / automatic.
+    sequences: [],
   });
 
   // the fields that make up one avatar's look
@@ -162,6 +165,20 @@
     out.switchFx = p.switchFx !== false;
     // per action (js/actions/*.js): its global hotkey and its settings. Shared by every avatar.
     // Entries for actions whose file is gone are kept, in case the file comes back.
+    const seqIds = new Set();
+    out.sequences = (Array.isArray(p.sequences) ? p.sequences : [])
+      .filter((s) => s && typeof s.id === 'string' && /^[\w-]{1,40}$/.test(s.id) && !seqIds.has(s.id) && seqIds.add(s.id))
+      .map((s) => ({
+        id: s.id,
+        name: str(s.name, 60) || 'Sequence',
+        steps: (Array.isArray(s.steps) ? s.steps : []).filter((n) => typeof n === 'string' && /^([\w-]{1,40}|avatar:[\w-]{1,40})$/.test(n)).slice(0, 8),
+        startDelay: Number.isFinite(s.startDelay) && s.startDelay > 0 && s.startDelay <= 60 ? Math.round(s.startDelay * 10) / 10 : null,
+        delay: Number.isFinite(s.delay) && s.delay >= 0.1 && s.delay <= 60 ? Math.round(s.delay * 10) / 10 : null,
+        values: str(s.values, 400),
+        hotkey: str(s.hotkey, 64),
+      }))
+      .filter((s) => s.steps.length)
+      .slice(0, 50);
     out.actions = {};
     for (const [id, a] of Object.entries(p.actions && typeof p.actions === 'object' ? p.actions : {})) {
       if (!/^[\w-]{1,40}$/.test(id) || !a || typeof a !== 'object') continue;

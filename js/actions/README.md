@@ -150,6 +150,22 @@ Test button / hotkey / Streamer.bot URL
 
 The Streamer.bot URL is `http://127.0.0.1:8777/api/streamerbot?action=<id>`. `?stop=<id>` stops one action and `?stop=all` stops everything. For a sequence, use `?sequence=a,b,next&startDelay=1&delay=2.5`, which runs up to 8 steps. Steps can also be `next`, `random` or `avatar:<id>`. Send the header `X-EasyTuber-Control: streamerbot`.
 
+### Saved sequences
+
+A sequence built in the Actions tab can be kept with **Save sequence**. It then has a name, its own global hotkey, and a short address:
+
+```
+http://127.0.0.1:8777/api/streamerbot?run=<id>
+```
+
+- The address plays the saved steps with the saved timing and values. Change the sequence in EASY-TUBER and Streamer.bot needs no edit.
+- Values in the address are added to the saved ones, and win when both have the same name: `…?run=<id>&user=%user%`.
+- It waits its turn like any sequence, and cooldowns apply (`&force=1` skips them).
+- `startDelay`, `delay`, `queue` and `hold` can't be added: the saved sequence keeps its own timing.
+- If a step's action file or avatar is gone, the answer is 404 and the tab marks the sequence.
+
+Saved sequences are stored in the avatar file, shared by all avatars.
+
 ### When many requests arrive at once
 
 - **One action** (`?action=wave`) plays straight away. If it is already playing it starts again (or a second copy starts, with `overlap: true`).
@@ -175,7 +191,7 @@ http://127.0.0.1:8777/api/streamerbot?action=wave&user=%user%&amount=500
 ```
 
 - Streamer.bot replaces its own variables, such as `%user%`, before it sends the URL. The **Values for the action** box in the Actions tab adds them to the copied URL as you typed them.
-- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `startDelay`, `delay`, `stop`, `hold`, `queue` and `force` are taken.
+- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `run`, `startDelay`, `delay`, `stop`, `hold`, `queue` and `force` are taken.
 - Up to 16 values, each up to 200 characters.
 - Text with `&`, `#` or `+` in it has to be URL-encoded before it goes in the URL, or it is cut short. Names and numbers are fine as they are.
 - In a sequence, every action step gets the same values.

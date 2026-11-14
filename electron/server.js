@@ -31,7 +31,8 @@ const AVATAR_ACTION = /^(next|random|avatar:[\w-]{1,40})$/;
 const ACTION_ID = /^[\w-]{1,40}$/;
 const SWITCH_MS = 1800;        // an avatar switch in a sequence: drop out + climb back in
 const MAX_STEPS = 8;
-const RESERVED = new Set(['action', 'sequence', 'startDelay', 'delay', 'stop', 'hold', 'queue', 'force']);   // the URL's own options
+const RESERVED = new Set(['action', 'sequence', 'run', 'startDelay', 'delay', 'stop', 'hold', 'queue', 'force']);   // the URL's own options
+const MAX_SAVED = 50;          // saved sequences
 const MAX_QUEUE = 20;          // sequences waiting for their turn
 const MAX_COOLDOWN = 3600000;  // an action's cooldown, ms
 const ARG_KEY = /^[\w-]{1,40}$/;
@@ -55,7 +56,7 @@ function actionArgs(params) {
 }
 function validBinding(b) {
   if (!b || typeof b.accelerator !== 'string' || typeof b.action !== 'string') return false;
-  if (b.accelerator.length > 64 || !(AVATAR_ACTION.test(b.action) || /^action:[\w-]{1,40}$/.test(b.action))) return false;
+  if (b.accelerator.length > 64 || !(AVATAR_ACTION.test(b.action) || /^(action|sequence):[\w-]{1,40}$/.test(b.action))) return false;
   const parts = b.accelerator.split('+');
   const key = parts.pop(), mods = parts;
   if (!KEY.test(key) || !mods.every((m) => MODIFIERS.has(m)) || new Set(mods).size !== mods.length) return false;
@@ -96,10 +97,33 @@ async function actionFiles(dir) {
   } catch (e) { return []; }
 }
 
+/* The editor's saved sequences: [{ id, steps, startDelay, delay, args }] (times in ms) -> Map, or null if bad.
+   Steps are checked against the actions when the sequence is run, not here. */
+function parseSequences(list) {
+  if (list === undefined) return new Map();
+  if (!Array.isArray(list) || list.length > MAX_SAVED) return null;
+  const out = new Map();
+  for (const s of list) {
+    if (!s || typeof s.id !== 'string' || !ACTION_ID.test(s.id) || !Array.isArray(s.steps)) return null;
+    if (!s.steps.length || s.steps.length > MAX_STEPS) return null;
+    if (!s.steps.every((n) => typeof n === 'string' && (ACTION_ID.test(n) || AVATAR_ACTION.test(n)))) return null;
+    const ms = (v, min) => (Number.isFinite(v) && v >= min && v <= 60000 ? Math.round(v) : undefined);
+    let args = null;
+    if (s.args && typeof s.args === 'object' && !Array.isArray(s.args)) {
+      const checked = actionArgs(Object.entries(s.args).map(([k, v]) => [k, String(v)]));
+      if (typeof checked === 'string') return null;
+      args = checked;
+    }
+    out.set(s.id, { steps: s.steps.slice(), startDelay: ms(s.startDelay, 0), delay: ms(s.delay, 100), args });
+  }
+  return out;
+}
+
 function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null }) {
   let version = 0;
   const listeners = new Set();
   let catalog = new Map();       // actions the editor has loaded
+  let saved = new Map();         // the editor's saved sequences: id -> { steps, startDelay, delay, args }
   let sequenceTimer = null;      // a sequence step waiting to play
   let nonce = 0;
   const held = new Map();        // held actions that are on: id -> the message that started it
@@ -173,7 +197,23 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
     else { playStep(steps[0], args); next(1, delay ?? steps[0].wait); }
   };
   /* a global hotkey press (main.js): actions play straight from here, avatar switches go to the editor */
+  // run a sequence now, or put it in the queue: 0 = started, n = its place in the queue, -1 = the queue is full
+  const startOrQueue = (steps, opts) => {
+    if (!sequenceTimer) { runSequence(steps, opts); return 0; }
+    if (queue.length >= MAX_QUEUE) return -1;
+    queue.push({ steps, opts });
+    const now = Date.now();
+    for (const s of steps) if (s.event === 'live') lastPlayed.set(s.name, now);   // the cooldown starts when it is accepted
+    return queue.length;
+  };
   const trigger = (action) => {
+    const run = /^sequence:([\w-]{1,40})$/.exec(action);
+    if (run) {
+      // a saved sequence's hotkey: it waits its turn like any sequence
+      const seq = saved.get(run[1]), steps = seq ? seq.steps.map(stepFor) : [];
+      if (seq && steps.every(Boolean)) startOrQueue(steps, { startDelay: seq.startDelay, delay: seq.delay, args: seq.args });
+      return;
+    }
     const m = /^action:([\w-]{1,40})$/.exec(action);
     if (!m) return broadcast('hotkey', { action });
     const step = stepFor(m[1]);
@@ -291,7 +331,10 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         try { data = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
         const next = parseCatalog(data && data.actions);
         if (!next) return sendJson(res, 400, { error: 'bad action list' });
+        const nextSaved = parseSequences(data.sequences);
+        if (!nextSaved) return sendJson(res, 400, { error: 'bad sequence list' });
         catalog = next;
+        saved = nextSaved;
         // a held action whose file is gone (or is no longer a held one) can't be left on
         for (const id of [...held.keys()]) if (!catalog.has(id) || !catalog.get(id).hold) stopHeld(id);
         return sendJson(res, 200, { ok: true, count: catalog.size, held: [...held.keys()] });
@@ -305,6 +348,7 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
            /api/streamerbot?action=<id>&hold=on    a held action: on (off: hold=off)
            /api/streamerbot?stop=<id>  or  stop=all           stop one action, or everything
            /api/streamerbot?action=<id>&queue=1    wait for a turn instead of playing over what is playing
+           /api/streamerbot?run=<id>               a sequence saved in the Actions tab, with its timing and values
          A sequence that arrives while another plays waits in a queue (up to 20). An action with a
          cooldown answers 429 until the time has passed; force=1 skips that (the Test button uses it).
          Only from this computer, and only with the header X-EasyTuber-Control: streamerbot. A web page
@@ -315,8 +359,8 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
           return sendJson(res, 403, { error: 'Use a local URL and send the header X-EasyTuber-Control: streamerbot' });
         }
         const params = new URL(req.url, `http://127.0.0.1:${port}`).searchParams;
-        const singles = params.getAll('action'), sequences = params.getAll('sequence'), stops = params.getAll('stop');
-        if (singles.length + sequences.length + stops.length !== 1) return sendJson(res, 400, { error: 'Send one action=, one sequence= or one stop=' });
+        const singles = params.getAll('action'), sequences = params.getAll('sequence'), stops = params.getAll('stop'), runs = params.getAll('run');
+        if (singles.length + sequences.length + stops.length + runs.length !== 1) return sendJson(res, 400, { error: 'Send one action=, one sequence=, one run= or one stop=' });
         if (stops.length) {
           if ([...params.keys()].length !== 1) return sendJson(res, 400, { error: 'stop= takes nothing else' });
           if (stops[0] === 'all') { stopHeld(); return sendJson(res, 202, { accepted: true }); }
@@ -327,25 +371,31 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         const holds = params.getAll('hold');
         if (holds.length > 1 || (holds.length && !['on', 'off'].includes(holds[0]))) return sendJson(res, 400, { error: 'hold must be on or off' });
         const want = holds.length ? holds[0] === 'on' : undefined;
-        const names = sequences.length ? sequences[0].split(',').map((s) => s.trim()) : singles;
+        // run=<id>: a saved sequence brings its own steps, timing and values
+        const seq = runs.length ? saved.get(runs[0]) : null;
+        if (runs.length && !seq) return sendJson(res, 404, { error: 'Unknown saved sequence: ' + runs[0].slice(0, 40) + (catalog.size ? '' : ' (is the editor open?)') });
+        if (seq && ['startDelay', 'delay', 'hold', 'queue'].some((k) => params.has(k))) return sendJson(res, 400, { error: 'A saved sequence keeps its own timing: run= takes only values and force=1' });
+        const isSeq = sequences.length > 0 || !!seq;
+        const names = seq ? seq.steps : sequences.length ? sequences[0].split(',').map((s) => s.trim()) : singles;
         if (!names.length || names.length > MAX_STEPS) return sendJson(res, 400, { error: `A sequence has 1 to ${MAX_STEPS} steps` });
         const steps = names.map(stepFor);
         const unknown = names.filter((n, i) => !steps[i]);
         if (unknown.length) return sendJson(res, 404, { error: 'Unknown action: ' + unknown.join(', ') + (catalog.size ? '' : ' (is the editor open?)') });
-        const startDelay = seconds(params, 'startDelay', 0), delay = seconds(params, 'delay', 0.1);
-        if (!sequences.length && (startDelay !== undefined || delay !== undefined)) return sendJson(res, 400, { error: 'Timing options need a sequence' });
+        const startDelay = seq ? seq.startDelay : seconds(params, 'startDelay', 0), delay = seq ? seq.delay : seconds(params, 'delay', 0.1);
+        if (!isSeq && (startDelay !== undefined || delay !== undefined)) return sendJson(res, 400, { error: 'Timing options need a sequence' });
         if (Number.isNaN(startDelay)) return sendJson(res, 400, { error: 'startDelay must be 0 to 60 seconds, in tenths' });
         if (Number.isNaN(delay)) return sendJson(res, 400, { error: 'delay must be 0.1 to 60 seconds, in tenths' });
-        const args = actionArgs(params);
+        let args = actionArgs(params);
         if (typeof args === 'string') return sendJson(res, 400, { error: args });
-        if (want !== undefined && (sequences.length || !steps[0].hold)) return sendJson(res, 400, { error: 'hold= is for one held action' });
+        if (seq && seq.args) args = { ...seq.args, ...(args || {}) };   // values in the URL win over the saved ones
+        if (want !== undefined && (isSeq || !steps[0].hold)) return sendJson(res, 400, { error: 'hold= is for one held action' });
         const flag = (key) => {
           const v = params.getAll(key);
           return v.length === 0 ? false : v.length === 1 && v[0] === '1' ? true : null;
         };
         const inTurn = flag('queue'), force = flag('force');
         if (inTurn === null || force === null) return sendJson(res, 400, { error: 'queue and force are 1 or left out' });
-        if (inTurn && (sequences.length || steps[0].hold || steps[0].event !== 'live')) return sendJson(res, 400, { error: 'queue=1 is for one action that is not held (a sequence always waits its turn)' });
+        if (inTurn && (isSeq || steps[0].hold || steps[0].event !== 'live')) return sendJson(res, 400, { error: 'queue=1 is for one action that is not held (a sequence always waits its turn)' });
         if (!force) {
           const waits = steps.map((s) => coolingDown(s, want));
           const worst = Math.max(...waits);
@@ -355,20 +405,14 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
             return sendJson(res, 429, { error: `"${catalog.get(step.name).label}" is cooling down: ${left} s left`, retryAfter: left });
           }
         }
-        if (!sequences.length && !inTurn) {
+        if (!isSeq && !inTurn) {
           const on = playStep(steps[0], args, want);
           return sendJson(res, 202, on === undefined ? { accepted: true } : { accepted: true, on });
         }
         // a sequence, or one action asked to wait its turn: straight away if nothing plays, else queued
-        if (sequenceTimer) {
-          if (queue.length >= MAX_QUEUE) return sendJson(res, 409, { error: `The queue is full (${MAX_QUEUE} waiting)` });
-          queue.push({ steps, opts: { startDelay, delay, args } });
-          const now = Date.now();
-          for (const s of steps) if (s.event === 'live') lastPlayed.set(s.name, now);   // the cooldown starts when it is accepted
-          return sendJson(res, 202, { accepted: true, queued: queue.length });
-        }
-        runSequence(steps, { startDelay, delay, args });
-        return sendJson(res, 202, { accepted: true });
+        const place = startOrQueue(steps, { startDelay, delay, args });
+        if (place < 0) return sendJson(res, 409, { error: `The queue is full (${MAX_QUEUE} waiting)` });
+        return sendJson(res, 202, place ? { accepted: true, queued: place } : { accepted: true });
       }
 
       /* the editor's mic level, blinks and avatar-switch cues, passed on to the stage pages.

@@ -159,10 +159,10 @@
 
     /* Actions (desktop app only): tell the server which actions exist, so Streamer.bot requests can be
        checked and timed. actions = [{ id, label, duration }] */
-    async setActions(actions) {
+    async setActions(actions, sequences = []) {
       if (!this.server) return false;
       try {
-        const r = await fetch('api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }) });
+        const r = await fetch('api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions, sequences }) });
         return r.ok;
       } catch (e) { return false; }
     },
