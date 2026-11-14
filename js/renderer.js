@@ -11,6 +11,62 @@
       this.stageMode = false;
       this.camMode = false;     // virtual camera: a camera picture can't be transparent
       this.checker = null;
+      this.layers = {};         // off-screen canvases for the stage effects, made when first needed
+    }
+
+    // an off-screen canvas the size of the stage canvas
+    layer(name) {
+      const c = this.layers[name] || (this.layers[name] = document.createElement('canvas'));
+      if (c.width !== this.canvas.width || c.height !== this.canvas.height) { c.width = this.canvas.width; c.height = this.canvas.height; }
+      return c;
+    }
+
+    /* drawRig with the stage effects (see PT.stageFx): the avatar is drawn off screen, then put on
+       the stage with an outline around its whole shape, darkened, and with a shadow behind it.
+       Without effects this is drawRig. */
+    drawRigFx(project, pose, states, opts, fx) {
+      if (!fx) return this.drawRig(project, pose, states, opts);
+      const main = this.ctx, w = this.canvas.width, h = this.canvas.height, k = this.view()[0];
+      const rig = this.layer('rig'), rctx = rig.getContext('2d');
+      rctx.setTransform(1, 0, 0, 1, 0, 0);
+      rctx.clearRect(0, 0, w, h);
+      this.ctx = rctx;
+      try { this.drawRig(project, pose, states, opts); } finally { this.ctx = main; }
+
+      let out = rig;
+      if (fx.outline > 0) {
+        // the avatar's shape in the outline colour, stamped in a ring around where the avatar goes
+        const shape = this.layer('shape'), sctx = shape.getContext('2d');
+        sctx.globalCompositeOperation = 'copy';
+        sctx.drawImage(rig, 0, 0);
+        sctx.globalCompositeOperation = 'source-in';
+        sctx.fillStyle = fx.outlineColor;
+        sctx.fillRect(0, 0, w, h);
+        sctx.globalCompositeOperation = 'source-over';
+        const ring = this.layer('ring'), octx = ring.getContext('2d');
+        octx.clearRect(0, 0, w, h);
+        const r = fx.outline * k, n = Math.max(12, Math.min(40, Math.ceil(r * 2)));
+        for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; octx.drawImage(shape, Math.cos(a) * r, Math.sin(a) * r); }
+        octx.drawImage(rig, 0, 0);
+        out = ring;
+      }
+      if (fx.dim > 0) {
+        const octx = out.getContext('2d');
+        octx.globalCompositeOperation = 'source-atop';   // only where the avatar is
+        octx.fillStyle = `rgba(0,0,0,${fx.dim})`;
+        octx.fillRect(0, 0, w, h);
+        octx.globalCompositeOperation = 'source-over';
+      }
+      main.setTransform(1, 0, 0, 1, 0, 0);
+      main.globalAlpha = 1;
+      if (fx.shadow > 0) {
+        main.shadowColor = `rgba(0,0,0,${0.8 * fx.shadow})`;
+        main.shadowBlur = 26 * k;
+        main.shadowOffsetX = 0;
+        main.shadowOffsetY = 14 * k;
+      }
+      main.drawImage(out, 0, 0);
+      main.shadowColor = 'rgba(0,0,0,0)'; main.shadowBlur = 0; main.shadowOffsetY = 0;
     }
 
     resize() {
