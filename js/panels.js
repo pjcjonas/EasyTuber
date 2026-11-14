@@ -397,7 +397,8 @@
     // "Version 1.2.3", filled in once the app has answered
     versionLine() {
       const line = this.note('');
-      PT.Storage.version().then((v) => { if (v && v.current) line.textContent = 'This is version ' + v.current + '.'; else line.remove(); });
+      // the version, and the credit the licence asks every copy to keep (see NOTICE)
+      PT.Storage.version().then((v) => { if (v && v.current) line.textContent = `This is version ${v.current}. EASY-TUBER was created by pjcjonas; free software under the GNU GPL v3 (see LICENSE and NOTICE).`; else line.remove(); });
       return line;
     },
 

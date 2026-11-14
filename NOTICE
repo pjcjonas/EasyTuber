@@ -1,0 +1,32 @@
+EASY-TUBER
+Copyright (C) 2026 pjcjonas (https://github.com/pjcjonas)
+Original project: https://github.com/pjcjonas/EasyTuber
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, version 3 of the License,
+with the additional terms below (section 7 of the License). See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+
+ADDITIONAL TERMS (GNU GPL version 3, section 7)
+
+a) Author attribution (section 7(b)). Every copy and every modified version of this program, in
+   source or in any other form, must keep this NOTICE file and the following attribution intact:
+
+       Based on EASY-TUBER, created by pjcjonas — https://github.com/pjcjonas/EasyTuber
+
+   A version with a user interface that displays Appropriate Legal Notices (for example an
+   "About" screen, credits or a licence page) must include this attribution in them.
+
+b) Origin and modified versions (section 7(c)). You may not misrepresent the origin of this
+   program. A modified version must be marked as changed from the original, in a reasonable way,
+   and must not be presented as the original EASY-TUBER or as made by its author.
+
+
+THIRD-PARTY CODE
+
+js/vendor/ag-psd.js is ag-psd by Agamnentzar, under the MIT License (js/vendor/ag-psd.LICENSE.txt).
+See js/vendor/README.md.

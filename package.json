@@ -1,11 +1,13 @@
 {
   "name": "easy-tuber",
   "productName": "EASY-TUBER",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "description": "EASY-TUBER: upload your body parts and get a PNGTuber that breathes, blinks and talks to your microphone.",
   "main": "electron/main.js",
   "private": true,
   "repository": "github:pjcjonas/EasyTuber",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "pjcjonas (https://github.com/pjcjonas)",
   "scripts": {
     "start": "electron .",
     "test": "node --test \"tests/*.test.js\"",
