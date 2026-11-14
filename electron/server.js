@@ -31,7 +31,9 @@ const AVATAR_ACTION = /^(next|random|avatar:[\w-]{1,40})$/;
 const ACTION_ID = /^[\w-]{1,40}$/;
 const SWITCH_MS = 1800;        // an avatar switch in a sequence: drop out + climb back in
 const MAX_STEPS = 8;
-const RESERVED = new Set(['action', 'sequence', 'startDelay', 'delay', 'stop', 'hold']);   // the URL's own options
+const RESERVED = new Set(['action', 'sequence', 'startDelay', 'delay', 'stop', 'hold', 'queue', 'force']);   // the URL's own options
+const MAX_QUEUE = 20;          // sequences waiting for their turn
+const MAX_COOLDOWN = 3600000;  // an action's cooldown, ms
 const ARG_KEY = /^[\w-]{1,40}$/;
 const MAX_ARGS = 16, MAX_ARG_LENGTH = 200;
 
@@ -69,7 +71,7 @@ function seconds(params, key, minimum) {
   return Math.round(s * 1000);
 }
 
-/* The editor's list of actions (js/actions/*.js): [{ id, label, duration }] -> Map, or null if bad. */
+/* The editor's list of actions: [{ id, label, duration, hold, cooldown }] -> Map, or null if bad. */
 function parseCatalog(list) {
   if (!Array.isArray(list) || list.length > 200) return null;
   const out = new Map();
@@ -78,7 +80,9 @@ function parseCatalog(list) {
     // a held action has no length: it runs until it is stopped
     const hold = a.hold === true;
     if (!hold && (!Number.isFinite(a.duration) || a.duration < 100 || a.duration > 60000)) return null;
-    out.set(a.id, { label: typeof a.label === 'string' ? a.label.slice(0, 60) : a.id, duration: hold ? 0 : Math.round(a.duration), hold });
+    // cooldown: ms that must pass before a Streamer.bot request may play it again
+    const cooldown = Number.isFinite(a.cooldown) ? Math.max(0, Math.min(MAX_COOLDOWN, Math.round(a.cooldown))) : 0;
+    out.set(a.id, { label: typeof a.label === 'string' ? a.label.slice(0, 60) : a.id, duration: hold ? 0 : Math.round(a.duration), hold, cooldown });
   }
   return out;
 }
@@ -99,6 +103,8 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   let sequenceTimer = null;      // a sequence step waiting to play
   let nonce = 0;
   const held = new Map();        // held actions that are on: id -> the message that started it
+  const queue = [];              // sequences waiting for the one that is playing: [{ steps, opts }]
+  const lastPlayed = new Map();  // action id -> when it was last played or accepted (for cooldowns)
 
   const broadcast = (event, data) => {
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -130,6 +136,7 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
       n: Date.now().toString(36) + '-' + (++nonce).toString(36), seed: Math.floor(Math.random() * 4294967296),
     };
     if (args) msg.args = args;   // values from the URL, read by the action as a.args
+    lastPlayed.set(step.name, Date.now());
     if (step.hold) held.set(step.name, msg);
     broadcast('live', msg);
     return step.hold ? true : undefined;
@@ -137,16 +144,28 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   // stop one action, or every action (and a sequence that is waiting) when there is no id
   const stopHeld = (id) => {
     if (id) held.delete(id);
-    else { held.clear(); clearTimeout(sequenceTimer); sequenceTimer = null; }
+    else { held.clear(); queue.length = 0; clearTimeout(sequenceTimer); sequenceTimer = null; }
     broadcast('live', id ? { type: 'action-stop', id } : { type: 'action-stop' });
   };
-  // steps play one after another: each waits for the one before to finish, or for `delay` ms if given
+  /* How long until this action may be played by a request again, ms (0 = now). A held action that
+     is on can always be turned off. */
+  const coolingDown = (step, want) => {
+    if (step.event !== 'live') return 0;
+    const cd = catalog.get(step.name).cooldown;
+    if (!cd || !lastPlayed.has(step.name)) return 0;
+    if (step.hold && (want === false || (want === undefined && held.has(step.name)))) return 0;
+    return Math.max(0, lastPlayed.get(step.name) + cd - Date.now());
+  };
+  // steps play one after another: each waits for the one before to finish, or for `delay` ms if given.
+  // When the last step has had its time, the next sequence in the queue starts.
   const runSequence = (steps, { startDelay = 0, delay, args = null } = {}) => {
     const next = (i, wait) => {
-      if (i >= steps.length) { sequenceTimer = null; return; }
       sequenceTimer = setTimeout(() => {
-        playStep(steps[i], args);
-        next(i + 1, delay ?? steps[i].wait);
+        if (i < steps.length) { playStep(steps[i], args); return next(i + 1, delay ?? steps[i].wait); }
+        // the last step has had its time: the sequence is over
+        sequenceTimer = null;
+        const waiting = queue.shift();
+        if (waiting) runSequence(waiting.steps, waiting.opts);
       }, wait);
       if (sequenceTimer.unref) sequenceTimer.unref();
     };
@@ -285,6 +304,9 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
            /api/streamerbot?action=<id>            on a held action: turns it on, or off if it is on
            /api/streamerbot?action=<id>&hold=on    a held action: on (off: hold=off)
            /api/streamerbot?stop=<id>  or  stop=all           stop one action, or everything
+           /api/streamerbot?action=<id>&queue=1    wait for a turn instead of playing over what is playing
+         A sequence that arrives while another plays waits in a queue (up to 20). An action with a
+         cooldown answers 429 until the time has passed; force=1 skips that (the Test button uses it).
          Only from this computer, and only with the header X-EasyTuber-Control: streamerbot. A web page
          can't add that header without a CORS preflight, which is refused, so websites can't trigger it. */
       if (urlPath === '/api/streamerbot' && req.method === 'GET') {
@@ -317,11 +339,34 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         const args = actionArgs(params);
         if (typeof args === 'string') return sendJson(res, 400, { error: args });
         if (want !== undefined && (sequences.length || !steps[0].hold)) return sendJson(res, 400, { error: 'hold= is for one held action' });
-        if (!sequences.length) {
+        const flag = (key) => {
+          const v = params.getAll(key);
+          return v.length === 0 ? false : v.length === 1 && v[0] === '1' ? true : null;
+        };
+        const inTurn = flag('queue'), force = flag('force');
+        if (inTurn === null || force === null) return sendJson(res, 400, { error: 'queue and force are 1 or left out' });
+        if (inTurn && (sequences.length || steps[0].hold || steps[0].event !== 'live')) return sendJson(res, 400, { error: 'queue=1 is for one action that is not held (a sequence always waits its turn)' });
+        if (!force) {
+          const waits = steps.map((s) => coolingDown(s, want));
+          const worst = Math.max(...waits);
+          if (worst > 0) {
+            const step = steps[waits.indexOf(worst)], left = Math.ceil(worst / 1000);
+            res.setHeader('Retry-After', String(left));
+            return sendJson(res, 429, { error: `"${catalog.get(step.name).label}" is cooling down: ${left} s left`, retryAfter: left });
+          }
+        }
+        if (!sequences.length && !inTurn) {
           const on = playStep(steps[0], args, want);
           return sendJson(res, 202, on === undefined ? { accepted: true } : { accepted: true, on });
         }
-        if (sequenceTimer) return sendJson(res, 409, { error: 'A sequence is already playing' });
+        // a sequence, or one action asked to wait its turn: straight away if nothing plays, else queued
+        if (sequenceTimer) {
+          if (queue.length >= MAX_QUEUE) return sendJson(res, 409, { error: `The queue is full (${MAX_QUEUE} waiting)` });
+          queue.push({ steps, opts: { startDelay, delay, args } });
+          const now = Date.now();
+          for (const s of steps) if (s.event === 'live') lastPlayed.set(s.name, now);   // the cooldown starts when it is accepted
+          return sendJson(res, 202, { accepted: true, queued: queue.length });
+        }
         runSequence(steps, { startDelay, delay, args });
         return sendJson(res, 202, { accepted: true });
       }

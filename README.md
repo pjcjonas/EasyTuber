@@ -270,7 +270,8 @@ Only add action files you trust. An action is a small program that runs inside E
 
 * **▶ Test** plays it in the editor, the stage window and OBS at the same time.
 * **Set key** gives it a global hotkey, with the same rules as the avatar hotkeys.
-* **Settings** (when the action has any) are its own sliders and checkboxes. They are saved with your avatar file.
+* **Settings** holds the action's **Cooldown** and its own sliders and checkboxes, when it has any. They are saved with your avatar file.
+* **Cooldown** is how many seconds Streamer.bot has to wait before it can play the action again, so chat can't spam it. Test and your own hotkeys always play. 0 means no cooldown.
 
 **Actions that stay on.** Some actions are *held*: they stay on until you turn them off, like a "be right back" pose. Their button says **▶ Turn on** and then **■ Turn off**, and their hotkey switches them the same way. **■ Stop all actions** stops everything that is playing.
 
@@ -288,6 +289,8 @@ Only add action files you trust. An action is a small program that runs inside E
 
 4. For a held action, the address turns it on, and off again if it is already on. The tab shows the two other addresses you may want: one that only turns it on, and one that turns it off. Use those when one trigger starts it and another ends it.
 5. Some actions use values, such as a name to show. Type them in **Values for the action**, for example `user=%user%&amount=500`, and they are added to the address. Streamer.bot fills in its own variables, like `%user%`, when it sends it.
+
+When several requests arrive close together, sequences play one after another: up to 20 wait in a queue. A single action plays straight away; add `&queue=1` to its address to make it wait its turn too.
 
 Keep EASY-TUBER running while you stream.
 
