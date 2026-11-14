@@ -120,7 +120,7 @@
     activeAvatar: 'a1',
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
-    actions: {},                         // { [actionId]: { hotkey, settings: { key: value } } }
+    actions: {},                         // { [actionId]: { hotkey, settings: { key: value }, cooldown } }
   });
 
   // the fields that make up one avatar's look
@@ -169,7 +169,9 @@
       for (const [k, v] of Object.entries(a.settings && typeof a.settings === 'object' ? a.settings : {})) {
         if (/^[\w-]{1,40}$/.test(k) && (typeof v === 'boolean' || Number.isFinite(v))) settings[k] = v;
       }
-      out.actions[id] = { hotkey: str(a.hotkey, 64), settings };
+      // cooldown: seconds before Streamer.bot may play it again (0 = none)
+      const cooldown = Number.isFinite(a.cooldown) ? Math.max(0, Math.min(3600, a.cooldown)) : 0;
+      out.actions[id] = { hotkey: str(a.hotkey, 64), settings, cooldown };
     }
     return out;
   };

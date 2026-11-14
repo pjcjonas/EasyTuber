@@ -56,7 +56,7 @@ test('settingsFor fills defaults and keeps saved values in range', () => {
   const d = PT.Actions.define({ id: 'a', duration: 500, settings: [
     { key: 'h', type: 'range', min: 0, max: 10, default: 4 }, { key: 'on', type: 'check', default: false }] });
   const p = PT.normalizeProject({ parts: {}, actions: { a: { hotkey: 'Ctrl+1', settings: { h: 99, on: true, junk: 'x' } } } });
-  assert.deepEqual(JSON.parse(JSON.stringify(p.actions)), { a: { hotkey: 'Ctrl+1', settings: { h: 99, on: true } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(p.actions)), { a: { hotkey: 'Ctrl+1', settings: { h: 99, on: true }, cooldown: 0 } });
   assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.settingsFor(p, d))), { h: 10, on: true });
   assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.settingsFor(PT.defaultProject(), d))), { h: 4, on: false });
 });
@@ -156,7 +156,7 @@ function request(port, method, p, body, headers = {}) {
     const req = http.request({ host: '127.0.0.1', port, method, path: p, headers }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; });
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
     });
     req.on('error', reject);
     if (body !== undefined) req.write(body);
@@ -242,7 +242,7 @@ test('/api/streamerbot plays one action on every page', async (t) => {
   assert.equal(events[1].event, 'hotkey');
 });
 
-test('/api/streamerbot sequences: start delay, fixed delay, one at a time', async (t) => {
+test('/api/streamerbot sequences: start delay, fixed delay, each step waits for the one before', async (t) => {
   const { sse, setCatalog, sb } = await server(t, 18803);
   await setCatalog([{ id: 'a', duration: 300 }, { id: 'b', duration: 100 }]);
 
@@ -252,14 +252,15 @@ test('/api/streamerbot sequences: start delay, fixed delay, one at a time', asyn
 
   const t0 = Date.now();
   assert.equal((await sb('sequence=a,b,random&startDelay=0.2&delay=0.1')).status, 202);
-  assert.equal((await sb('sequence=a')).status, 409);                             // one sequence at a time
   const ev = await sse.waitFor(3);
   assert.deepEqual(ev.map((e) => e.data.id || e.data.action), ['a', 'b', 'random']);
   assert.ok(ev[0].at - t0 >= 180, 'start delay');
   assert.ok(ev[2].at - ev[0].at >= 180, 'fixed delay between steps');
 
   // without a fixed delay each step waits for the one before to finish (a = 300 ms)
-  await new Promise((r) => setTimeout(r, 50));
+  assert.equal((await sb('stop=all')).status, 202);                               // don't wait for the avatar switch
+  await sse.waitFor(4);
+  sse.events.pop();
   assert.equal((await sb('sequence=a,b')).status, 202);
   const ev2 = await sse.waitFor(5);
   assert.ok(ev2[4].at - ev2[3].at >= 280, 'waited for the first action');
@@ -694,4 +695,102 @@ test('a held step in a sequence does not make the next step wait', async (t) => 
   const evs = await sse.waitFor(2);
   assert.deepEqual(evs.map((e) => e.data.id), ['brb', 'wave']);
   assert.ok(evs[1].at - evs[0].at < 80, `waited ${evs[1].at - evs[0].at} ms`);
+});
+
+/* ---------------- queue and cooldown ---------------- */
+
+test('a sequence that arrives while another plays waits its turn', async (t) => {
+  const { sse, setCatalog, sb } = await server(t, 18880);
+  await setCatalog([{ id: 'a', duration: 150 }, { id: 'b', duration: 150 }, { id: 'h', duration: 0, hold: true }]);
+  const body = async (q) => { const r = await sb(q); return [r.status, JSON.parse(r.body)]; };
+
+  assert.deepEqual(await body('sequence=a,b&user=one'), [202, { accepted: true }]);
+  assert.deepEqual(await body('sequence=b&user=two'), [202, { accepted: true, queued: 1 }]);
+  assert.deepEqual(await body('action=a&queue=1&user=three'), [202, { accepted: true, queued: 2 }]);
+  assert.deepEqual(await body('action=b&user=now'), [202, { accepted: true }]);     // a plain action doesn't wait
+  const ev = await sse.waitFor(5, 4000);
+  assert.deepEqual(ev.map((e) => e.data.id + ' ' + e.data.args.user), ['a one', 'b now', 'b one', 'b two', 'a three']);
+  assert.ok(ev[3].at - ev[2].at >= 130, 'the queued sequence waited for the last step to finish');
+  assert.ok(ev[4].at - ev[3].at >= 130);
+
+  // queue=1 with nothing playing: straight away
+  await new Promise((r) => setTimeout(r, 200));
+  assert.deepEqual(await body('action=a&queue=1'), [202, { accepted: true }]);
+  await sse.waitFor(6);
+
+  for (const q of ['sequence=a,b&queue=1', 'action=h&queue=1', 'action=next&queue=1', 'action=a&queue=yes', 'action=a&queue=1&queue=1', 'action=a&force=0']) {
+    assert.equal((await sb(q)).status, 400, q);
+  }
+});
+
+test('the queue holds 20, and stop=all empties it', async (t) => {
+  const { sse, setCatalog, sb } = await server(t, 18881);
+  await setCatalog([{ id: 'slow', duration: 5000 }]);
+  assert.equal((await sb('sequence=slow')).status, 202);
+  for (let i = 1; i <= 20; i++) assert.deepEqual(JSON.parse((await sb('sequence=slow')).body), { accepted: true, queued: i });
+  const full = await sb('sequence=slow');
+  assert.equal(full.status, 409);
+  assert.match(JSON.parse(full.body).error, /queue is full/);
+  assert.equal((await sb('stop=all')).status, 202);
+  assert.deepEqual(JSON.parse((await sb('sequence=slow')).body), { accepted: true });   // nothing was waiting any more
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(sse.events.map((e) => e.data.type), ['action', 'action-stop', 'action']);
+});
+
+test('an action with a cooldown refuses Streamer.bot until the time has passed', async (t) => {
+  const { srv, sse, setCatalog, sb } = await server(t, 18882);
+  await setCatalog([
+    { id: 'wave', label: 'Wave', duration: 100, cooldown: 400 }, { id: 'free', duration: 100 },
+    { id: 'brb', label: 'BRB', duration: 0, hold: true, cooldown: 60000 },
+    { id: 'junk', duration: 100, cooldown: 'soon' }, { id: 'huge', duration: 100, cooldown: 1e12 },
+  ]);
+
+  assert.equal((await sb('action=wave')).status, 202);
+  const no = await sb('action=wave');
+  assert.equal(no.status, 429);
+  assert.deepEqual(JSON.parse(no.body), { error: '"Wave" is cooling down: 1 s left', retryAfter: 1 });
+  assert.equal((await sb('sequence=free,wave')).status, 429);          // a sequence with it in is refused whole
+  assert.equal((await sb('action=free')).status, 202);                 // other actions are not affected
+  assert.equal((await sb('action=free')).status, 202);
+  assert.equal((await sb('action=junk')).status, 202);                 // a bad cooldown is no cooldown
+  assert.equal((await sb('action=junk')).status, 202);
+  assert.equal((await sb('action=wave&force=1')).status, 202);         // the Test button
+  srv.trigger('action:wave');                                           // and your own hotkey
+  await sse.waitFor(7);
+  assert.equal((await sb('action=wave')).status, 429);                 // both started the cooldown again
+  await new Promise((r) => setTimeout(r, 450));
+  assert.equal((await sb('action=wave')).status, 202);
+
+  // a held action: the cooldown is on turning it on; turning it off always works
+  assert.equal((await sb('action=brb')).status, 202);
+  assert.deepEqual(JSON.parse((await sb('action=brb')).body), { accepted: true, on: false });
+  assert.equal((await sb('action=brb')).status, 429);
+  assert.equal((await sb('action=brb&hold=on')).status, 429);
+  assert.equal((await sb('action=brb&hold=off')).status, 202);
+  assert.equal((await sb('stop=brb')).status, 202);
+
+  // waiting in the queue counts as played
+  await setCatalog([{ id: 'slow', duration: 3000 }, { id: 'ping', label: 'Ping', duration: 100, cooldown: 60000 }]);
+  assert.equal((await sb('sequence=slow')).status, 202);
+  assert.deepEqual(JSON.parse((await sb('sequence=ping')).body), { accepted: true, queued: 1 });
+  assert.equal((await sb('sequence=ping')).status, 429);
+  const again = await sb('action=ping&queue=1');
+  assert.equal(again.status, 429);
+  assert.equal(again.headers['retry-after'], '60');
+});
+
+test('the catalog carries each action\'s saved cooldown, in ms', () => {
+  const PT = loadPT();
+  PT.Actions.define({ id: 'wave', duration: 500 });
+  PT.Actions.define({ id: 'bow', duration: 500 });
+  PT.Actions.define({ id: 'brb', hold: true });
+  const p = PT.normalizeProject({ parts: {}, actions: {
+    wave: { cooldown: 30 }, bow: { cooldown: -5 }, brb: { cooldown: 99999 }, gone: { cooldown: 'x' } } });
+  assert.deepEqual([p.actions.wave.cooldown, p.actions.bow.cooldown, p.actions.brb.cooldown, p.actions.gone.cooldown], [30, 0, 3600, 0]);
+  assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.catalog(p))), [
+    { id: 'wave', label: 'wave', duration: 500, cooldown: 30000 },
+    { id: 'bow', label: 'bow', duration: 500 },
+    { id: 'brb', label: 'brb', duration: 0, hold: true, cooldown: 3600000 },
+  ]);
+  assert.equal(PT.Actions.catalog().length, 3);          // no project: no cooldowns
 });

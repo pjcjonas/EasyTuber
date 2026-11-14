@@ -633,7 +633,13 @@
     // one action: play it, its hotkey, its settings
     actionRow(def) {
       const p = this.project, app = this.app;
-      const cfg = () => (p.actions[def.id] = p.actions[def.id] || { hotkey: '', settings: {} });
+      const cfg = () => (p.actions[def.id] = p.actions[def.id] || { hotkey: '', settings: {}, cooldown: 0 });
+      // how long Streamer.bot has to wait before it can play this action again
+      const cooldown = this.field('Cooldown', {
+        min: 0, max: 600, step: 1, suffix: 's', title: 'After it plays, Streamer.bot requests for it are refused for this long. Test and hotkeys always play. 0 = no cooldown.',
+        get: () => (p.actions[def.id] || {}).cooldown || 0,
+        set: (v) => { cfg().cooldown = PT.clamp(v, 0, 3600); app.changed({ settings: true }); app.sendCatalog(); },
+      });
       const settings = def.settings.map((s) => {
         const get = () => PT.Actions.settingsFor(p, def)[s.key];
         const set = (v) => { cfg().settings[s.key] = v; app.changed({ settings: true }); };
@@ -650,7 +656,7 @@
               PT.Actions.isHeld(def.id) ? '■ Turn off' : '▶ Turn on')
             : el('button', { class: 'btn small', title: 'Play it here, in the stage window and in OBS', onclick: () => app.playAction(def.id) }, '▶ Test')),
         el('div', { class: 'av-bottom' }, this.hotkeyRow('action:' + def.id, (p.actions[def.id] || {}).hotkey || '')),
-        settings.length ? el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), ...settings) : null);
+        el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), cooldown, ...settings));
     },
 
     // a held action was turned on or off (here, by a hotkey or by Streamer.bot): relabel its button

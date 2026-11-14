@@ -168,7 +168,8 @@
       // actions (js/actions/*.js): the server plays them on every page, this one included
       PT.Actions.onError = (def, e) => PT.toast(`Action "${def.label}" stopped with an error: ${e.message}`, 'error', 8000);
       for (const f of this.actionLoad.failed) PT.toast(`Action file ${f.src.split('/').pop()} was skipped: ${f.message}`, 'error', 10000);
-      PT.Storage.setActions(PT.Actions.catalog());
+      this.sendCatalog = PT.debounce(() => PT.Storage.setActions(PT.Actions.catalog(this.project)), 300);
+      PT.Storage.setActions(PT.Actions.catalog(this.project));
       PT.Storage.onLive((msg) => {
         if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
@@ -195,6 +196,7 @@
       PT.Panels.init();
       this.save();
       PT.Avatars.register();
+      this.sendCatalog();   // the new project's cooldowns
     },
 
     // after an avatar switch put a different look on screen
@@ -217,6 +219,7 @@
       if (PT.Storage.server) {
         const url = new URL('api/streamerbot', location.href);
         url.searchParams.set('action', id);
+        url.searchParams.set('force', '1');   // your own Test is never held back by a cooldown
         try { await PT.Storage.runActionUrl(url); } catch (e) { PT.toast('Could not play the action: ' + e.message, 'error'); }
         return;
       }

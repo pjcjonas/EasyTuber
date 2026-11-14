@@ -99,7 +99,16 @@
     get(id) { return this.defs.get(id) || null; },
     list() { return [...this.defs.values()]; },
     // what the server needs to check and time Streamer.bot requests
-    catalog() { return this.list().map(({ id, label, duration, hold }) => (hold ? { id, label, duration, hold } : { id, label, duration })); },
+    // project: where each action's cooldown is saved (seconds; sent in ms)
+    catalog(project) {
+      const saved = (project && project.actions) || {};
+      return this.list().map(({ id, label, duration, hold }) => {
+        const out = hold ? { id, label, duration, hold } : { id, label, duration };
+        const cd = saved[id] && saved[id].cooldown;
+        if (Number.isFinite(cd) && cd > 0) out.cooldown = Math.round(cd * 1000);
+        return out;
+      });
+    },
 
     /* Load every action file the server lists: the app's js/actions/ first, then the user's actions
        folder, so a user file can replace one of the app's. files = [{ src, from }].

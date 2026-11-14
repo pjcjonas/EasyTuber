@@ -150,6 +150,22 @@ Test button / hotkey / Streamer.bot URL
 
 The Streamer.bot URL is `http://127.0.0.1:8777/api/streamerbot?action=<id>`. `?stop=<id>` stops one action and `?stop=all` stops everything. For a sequence, use `?sequence=a,b,next&startDelay=1&delay=2.5`, which runs up to 8 steps. Steps can also be `next`, `random` or `avatar:<id>`. Send the header `X-EasyTuber-Control: streamerbot`.
 
+### When many requests arrive at once
+
+- **One action** (`?action=wave`) plays straight away. If it is already playing it starts again (or a second copy starts, with `overlap: true`).
+- **`?action=wave&queue=1`** waits its turn instead: it plays when whatever is in the queue before it has finished. Use it for redeems that should each be seen in full.
+- **A sequence** always waits its turn. Up to 20 can wait; after that the answer is 409.
+- **`?stop=all`** empties the queue as well.
+
+The answer to a request that has to wait is `{ "accepted": true, "queued": 2 }`: its place in the queue.
+
+**Cooldown.** Each action has a **Cooldown** under **Settings** in the Actions tab, in seconds. After the action plays, Streamer.bot requests for it get a 429 answer (`"Wave" is cooling down: 12 s left`) until the time has passed. A sequence containing it is refused whole.
+
+- **Test** and your own hotkeys always play. They do start the cooldown again.
+- A held action's cooldown is on turning it on. Turning it off always works.
+- A request that is waiting in the queue counts from when it was accepted.
+- `&force=1` skips the cooldown. The Test button uses it.
+
 ### Values from Streamer.bot
 
 Anything else in the URL is passed to the action as `a.args`:
@@ -159,7 +175,7 @@ http://127.0.0.1:8777/api/streamerbot?action=wave&user=%user%&amount=500
 ```
 
 - Streamer.bot replaces its own variables, such as `%user%`, before it sends the URL. The **Values for the action** box in the Actions tab adds them to the copied URL as you typed them.
-- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `startDelay` and `delay` are taken.
+- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `startDelay`, `delay`, `stop`, `hold`, `queue` and `force` are taken.
 - Up to 16 values, each up to 200 characters.
 - Text with `&`, `#` or `+` in it has to be URL-encoded before it goes in the URL, or it is cut short. Names and numbers are fine as they are.
 - In a sequence, every action step gets the same values.
