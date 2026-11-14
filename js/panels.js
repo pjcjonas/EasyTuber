@@ -95,7 +95,7 @@
         const p = this.project.parts[def.id];
         const user = PT.Assets.user[def.id] || {};
         const count = def.states.filter((s) => user[s]).length;
-        const sub = count === 0 ? 'empty, using placeholder'
+        const sub = count === 0 ? (def.custom ? 'empty' : 'empty, using placeholder')
           : def.states.length > 1 ? `${count}/${def.states.length} images` : 'uploaded';
 
         const eye = el('button', {
@@ -114,6 +114,39 @@
         this.makeDroppable(row, (files) => PT.Editor.importFiles(files, { part: def.id }));
         host.append(row);
       }
+      // your own parts: a hat, a tail, a prop, a hand of its own
+      if (group !== 'Your parts') host.append(el('div', { class: 'group-title' }, 'Your parts'));
+      host.append(el('div', { class: 'row', style: { margin: '6px 8px 10px' } },
+        el('button', {
+          class: 'btn', title: 'Add a part of your own to the skeleton: a hat, glasses, a tail, a prop…',
+          disabled: this.project.customParts.length >= PT.MAX_CUSTOM_PARTS,
+          onclick: () => { if (app.addPart()) PT.toast('Part added. Name it, choose what it is attached to, then give it an image.', '', 6000); },
+        }, '＋ Add part')));
+    },
+
+    // Name, parent, sway and Delete for one of the user's own parts
+    customPartBox(id) {
+      const app = this.app, def = PT.PART[id], list = this.project.customParts;
+      const at = list.findIndex((c) => c.id === id);
+      const name = el('input', { type: 'text', class: 'av-name', value: def.label, maxlength: 40, 'aria-label': 'Part name' });
+      name.addEventListener('change', () => app.updatePart(id, { label: name.value.trim() || def.label }));
+      // it can hang from a built-in part, or from one of your parts above it in the list
+      const choices = [...PT.BASE_PARTS, ...list.slice(0, at).map((c) => PT.PART[c.id])];
+      const parent = el('select', { 'aria-label': 'Attached to' }, ...choices.map((d) => el('option', { value: d.id }, PT.partName(d))));
+      parent.value = def.parent;
+      parent.addEventListener('change', () => app.updatePart(id, { parent: parent.value }));
+      return this.section('This part',
+        el('div', { class: 'row' }, name),
+        el('label', { class: 'note', style: { display: 'block', margin: '8px 0 4px' } }, 'Attached to'),
+        el('div', { class: 'row' }, parent),
+        this.field('Sway', { min: 0, max: 200, suffix: '%', get: () => Math.round(PT.PART[id].sway * 100), set: (v) => app.updatePart(id, { sway: v / 100 }),
+          title: 'How much it swings behind the part it is attached to. 0 = stiff.' }),
+        this.note(`It is the same part in every avatar; each avatar has its own image for it. In actions its id is ${id}.`),
+        el('div', { class: 'row' },
+          el('button', {
+            class: 'btn', title: 'Remove this part and its images from every avatar',
+            onclick: () => { if (confirm(`Delete "${def.label}" and its images from every avatar?`)) app.removePart(id); },
+          }, 'Delete part')));
     },
 
     /* ---------- right: Part tab ---------- */
@@ -203,6 +236,7 @@
       host.append(
         el('div', { class: 'title-row' }, el('h2', {}, def.label), el('span', { class: 'part-sub' }, def.group)),
         this.note(def.hint),
+        def.custom ? this.customPartBox(id) : '',
         this.section('Images', slots,
           def.states.length > 1 ? this.note('Click a filled slot to preview that state on the stage while editing.') : null,
           el('div', { class: 'row', style: { marginTop: '8px' } },

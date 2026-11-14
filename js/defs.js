@@ -42,6 +42,7 @@
       hint: 'Pivot = elbow. Should overlap the bottom of the upper arm.' },
   ];
   PT.PART = Object.fromEntries(PT.PARTS.map((p) => [p.id, p]));
+  PT.BASE_PARTS = PT.PARTS;   // the built-in skeleton; PT.PARTS also holds the user's own parts (see applyRig)
   PT.MIRROR = { armLUpper: 'armRUpper', armLLower: 'armRLower', armRUpper: 'armLUpper', armRLower: 'armLLower' };
 
   // Back-to-front draw order
@@ -60,6 +61,77 @@
     armLLower: { x: 325, y: 831,  rot: 3,  w: 72,  h: 170, px: 36,  py: 26 },
     armRUpper: { x: 660, y: 712,  rot: -7, w: 78,  h: 175, px: 39,  py: 30 },
     armRLower: { x: 675, y: 831,  rot: -3, w: 72,  h: 170, px: 36,  py: 26 },
+  };
+
+  /* ---------- custom parts ----------
+     Parts the user adds to the skeleton: a hat, a tail, a prop, a hand of its own. They are listed
+     in project.customParts as { id: 'c_…', label, parent, sway } and are the same for every
+     avatar; each avatar's look holds the art and placement, like any part. A custom part has one
+     image, hangs from its parent, and swings behind it when the parent turns (sway 0 = stiff). */
+  PT.MAX_CUSTOM_PARTS = 24;
+  const BASE_ORDER = PT.DEFAULT_ORDER, BASE_LAYOUT = PT.LAYOUT;
+  const CUSTOM_SIZE = 160;   // the slot a custom part's first image is fitted into
+
+  // a part's name with its side, for lists where "Upper arm" alone says too little
+  PT.partName = (def) => (def.group && /arm/i.test(def.group) ? def.group + ': ' : '') + def.label;
+
+  // The valid custom parts in a list. A part may only hang from a built-in part or from a custom
+  // part before it in the list, so parents always come first and there are no loops.
+  PT.cleanCustomParts = (list) => {
+    const out = [], ids = new Set(PT.BASE_PARTS.map((p) => p.id));
+    for (const c of Array.isArray(list) ? list : []) {
+      if (out.length >= PT.MAX_CUSTOM_PARTS) break;
+      if (!c || typeof c.id !== 'string' || !/^c_[a-z0-9]{1,16}$/.test(c.id) || ids.has(c.id)) continue;
+      out.push({
+        id: c.id,
+        label: (typeof c.label === 'string' ? c.label.trim().slice(0, 40) : '') || 'Part',
+        parent: ids.has(c.parent) ? c.parent : 'torso',
+        sway: Number.isFinite(c.sway) ? Math.max(0, Math.min(2, c.sway)) : 1,
+      });
+      ids.add(c.id);
+    }
+    return out;
+  };
+
+  /* Rebuild the skeleton (PT.PARTS, PT.PART, PT.DEFAULT_ORDER, PT.LAYOUT) for a project's custom
+     parts. Everything that walks the skeleton reads these, so nothing else needs to know custom
+     parts exist. Returns the cleaned list. */
+  PT.applyRig = (project) => {
+    const custom = PT.cleanCustomParts(project && project.customParts);
+    const parts = PT.BASE_PARTS.slice(), byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+    const layout = { ...BASE_LAYOUT };
+    for (const c of custom) {
+      const parent = byId[c.parent];
+      const def = {
+        id: c.id, label: c.label, group: 'Your parts', parent: c.parent, pivot: 'center', states: ['main'], custom: true, sway: c.sway,
+        hint: `Your own part. It moves with "${PT.partName(parent)}" and swings a little behind it.`,
+      };
+      parts.push(def); byId[c.id] = def;
+      // starts at the joint of what it hangs from
+      layout[c.id] = { x: layout[c.parent].x, y: layout[c.parent].y, rot: 0, w: CUSTOM_SIZE, h: CUSTOM_SIZE, px: CUSTOM_SIZE / 2, py: CUSTOM_SIZE / 2 };
+    }
+    PT.PARTS = parts; PT.PART = byId; PT.LAYOUT = layout;
+    PT.DEFAULT_ORDER = [...BASE_ORDER, ...custom.map((c) => c.id)];   // new parts are drawn in front
+    return custom;
+  };
+  // the custom parts of the skeleton as it is now
+  PT.customParts = () => PT.PARTS.filter((d) => d.custom).map((d) => ({ id: d.id, label: d.label, parent: d.parent, sway: d.sway }));
+
+  /* Make a look fit the skeleton as it is now: a part it has no entry for gets a default one
+     (a custom part at the joint of its parent), and parts that no longer exist are dropped. */
+  PT.syncLook = (look) => {
+    if (!look || typeof look !== 'object' || !look.parts || typeof look.parts !== 'object') return look;
+    for (const def of PT.PARTS) {
+      if (look.parts[def.id]) continue;
+      const d = PT.defaultPart(def.id), par = def.custom && look.parts[def.parent];
+      if (par && Number.isFinite(par.x) && Number.isFinite(par.y)) { d.x = par.x; d.y = par.y; }
+      look.parts[def.id] = d;
+    }
+    for (const id of Object.keys(look.parts)) if (!PT.PART[id]) delete look.parts[id];
+    const order = (Array.isArray(look.order) ? look.order : []).filter((id, i, a) => PT.PART[id] && a.indexOf(id) === i);
+    for (const id of PT.DEFAULT_ORDER) if (!order.includes(id)) order.push(id);
+    look.order = order;
+    return look;
   };
 
   PT.DEFAULT_MOTION = {
@@ -112,6 +184,7 @@
     root: { x: 0, y: 0, scale: 1 },
     // sprite sheets kept so crops can be re-edited: { id, name, url, w, h, boxes: [{ id, part, state, x, y, w, h }] }
     sheets: [],
+    customParts: PT.customParts(),   // the user's own parts (see applyRig); the same for every avatar
     motion: { ...PT.DEFAULT_MOTION },
     mic: { ...PT.DEFAULT_MIC },
     stage: { ...PT.DEFAULT_STAGE },
@@ -130,11 +203,15 @@
   // the fields that make up one avatar's look
   PT.LOOK_KEYS = ['parts', 'order', 'root', 'sheets'];
 
-  // Fill in anything missing (older files / partial imports)
-  PT.normalizeProject = (p) => {
+  /* Fill in anything missing (older files / partial imports).
+     A project brings its own custom parts, so the skeleton is rebuilt for it first. keepRig is for
+     normalising one avatar's look, which has no list of its own: the skeleton stays as it is. */
+  PT.normalizeProject = (p, keepRig = false) => {
+    if (!keepRig) PT.applyRig(p);
     const d = PT.defaultProject();
     if (!p || typeof p !== 'object') return d;
     const out = { ...d, ...p };
+    out.customParts = PT.customParts();
     out.parts = {};
     for (const def of PT.PARTS) {
       out.parts[def.id] = { ...PT.defaultPart(def.id), ...((p.parts || {})[def.id] || {}) };
@@ -142,7 +219,7 @@
       out.parts[def.id].adj = { ...((p.parts || {})[def.id] || {}).adj };
     }
     out.sheets = Array.isArray(p.sheets) ? p.sheets.filter((s) => s && s.url && Array.isArray(s.boxes)) : [];
-    const order = Array.isArray(p.order) ? p.order.filter((id) => PT.PART[id]) : [];
+    const order = Array.isArray(p.order) ? p.order.filter((id, i, a) => PT.PART[id] && a.indexOf(id) === i) : [];
     for (const id of PT.DEFAULT_ORDER) if (!order.includes(id)) order.push(id);
     out.order = order;
     out.root = { ...d.root, ...(p.root || {}) };
@@ -200,6 +277,16 @@
     const tokens = base.split(/[^a-z0-9]+/).filter(Boolean);
     const has = (...w) => w.some((x) => tokens.includes(x));
     const re = (r) => r.test(base);
+
+    // your own parts first, by name: "Party hat" takes party-hat.png and my_party_hat_v2.png (every
+    // word of the name is a word of the file name) and partyhat.png. The longest name wins.
+    const words = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const mine = PT.PARTS.filter((d) => d.custom && words(d.label).length)
+      .sort((a, b) => words(b.label).length - words(a.label).length || b.label.length - a.label.length);
+    for (const d of mine) {
+      const w = words(d.label);
+      if (w.every((x) => tokens.includes(x)) || tokens.join('') === w.join('')) return { part: d.id, state: 'main' };
+    }
 
     if (re(/eye|blink/)) {
       if (re(/half|mid|squint/)) return { part: 'eyes', state: 'half' };

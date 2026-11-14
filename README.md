@@ -138,6 +138,17 @@ Draw your character in your art program as separate layers and export each layer
 
 A part you've uploaded says **uploaded** in green in the list. Parts still using the placeholder say *empty, using placeholder*. You can turn the placeholder off in **Stage → Show placeholder art for empty parts**.
 
+### Your own parts
+
+The skeleton has 11 parts. You can add your own: a hat, glasses, ears, a tail, a hand that is separate from the forearm, a prop.
+
+1. At the bottom of the part list, click **＋ Add part**.
+2. In the **Part** tab, give it a name and choose what it is **Attached to**. It moves with that part. It can be attached to a built-in part or to one of your parts above it in the list.
+3. Give it an image, like any part. A dropped file goes to it when the file name contains the part's name: a part called *Party hat* takes `party-hat.png`.
+4. **Sway** sets how much it swings behind the part it is attached to when that part turns. Use 0 for something stiff, such as glasses.
+
+A part you add exists in every avatar, and each avatar has its own image and placement for it. An avatar with no image for it shows nothing there. A new part is drawn in front; move it with **Layer** in the Part tab. **Delete part** removes the part and its images from every avatar. You can add up to 24.
+
 ---
 
 ## 5. Line up the rig (Edit mode)
@@ -444,7 +455,7 @@ media/intro.mp4     the start-up intro
 index.html          page shell (editor; ?stage=1 = clean capture page for OBS; &cam=1 = the copy filmed for the virtual camera)
 css/style.css
 js/intro.js         the intro overlay
-js/defs.js          parts, hierarchy, default layout and settings, filename routing
+js/defs.js          parts, hierarchy, the user's own parts (applyRig), default layout and settings, filename routing
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
 js/transition.js    the drop-out / climb-in switch animation

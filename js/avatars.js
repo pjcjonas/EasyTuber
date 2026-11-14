@@ -9,8 +9,10 @@
 
   // parts that must come from the same avatar, or joints won't meet (an upper arm with another
   // avatar's forearm, say)
-  const MIX_GROUPS = [['torso'], ['neck'], ['face'], ['eyes'], ['mouth'], ['hairFront'], ['hairBack'],
+  const BASE_GROUPS = [['torso'], ['neck'], ['face'], ['eyes'], ['mouth'], ['hairFront'], ['hairBack'],
     ['armLUpper', 'armLLower'], ['armRUpper', 'armRLower']];
+  // each of the user's own parts is a group by itself
+  const mixGroups = () => [...BASE_GROUPS, ...PT.PARTS.filter((d) => d.custom).map((d) => [d.id])];
 
   const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
   const uid = () => 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -60,7 +62,7 @@
     return look;
   }
   function putLook(project, look) {
-    const n = PT.normalizeProject({ ...(look || {}) });
+    const n = PT.normalizeProject({ ...(look || {}) }, true);   // a look: the skeleton stays as it is
     for (const k of PT.LOOK_KEYS) project[k] = n[k];
   }
   function blankLook() { const d = PT.defaultProject(); return takeLook(d); }
@@ -71,19 +73,20 @@
   function mix(looks, rng = Math.random, base = looks[0]) {
     const look = { parts: {}, order: clone(base.order), root: clone(base.root), sheets: [] };
     const picks = [];
-    for (const group of MIX_GROUPS) {
+    for (const group of mixGroups()) {
       const withArt = looks.filter((l) => hasArt(l, group[0]));
       const pool = withArt.length ? withArt : looks;
       const src = pool[Math.floor(rng() * pool.length) % pool.length];
       picks.push(looks.indexOf(src));
-      for (const id of group) look.parts[id] = clone(src.parts[id]);
+      for (const id of group) look.parts[id] = src.parts[id] ? clone(src.parts[id]) : PT.defaultPart(id);   // a look from before the part existed
     }
     return { look, picks };
   }
 
   /* ---------------- the controller (editor window) ---------------- */
   const Avatars = {
-    RANDOM, MIX_GROUPS,
+    RANDOM, mixGroups,
+    get MIX_GROUPS() { return mixGroups(); },
     acceleratorFromEvent, prettyKey, takeLook, putLook, blankLook, mix, hasArt,
     status: {},          // accelerator -> registered with the system?
     supported: false,    // global hotkeys available (the desktop app)
@@ -240,9 +243,14 @@
 
     // avatars from a saved .easytuber.json file are added to this project
     async importFile(file) {
-      const data = PT.normalizeProject(JSON.parse(await file.text()));
-      const missing = await PT.Storage.missingPictures(data);
+      const raw = JSON.parse(await file.text());
+      const missing = await PT.Storage.missingPictures(raw);
       if (missing) throw new Error(`${missing} of its pictures are not in the file. Use "Save file" on the computer it came from and add that file instead.`);
+      // the file's own parts join this project's, so its avatars keep their hats and tails
+      const p = this.project, have = new Set(p.customParts.map((c) => c.id));
+      const extra = PT.cleanCustomParts(raw && raw.customParts).filter((c) => !have.has(c.id));
+      if (extra.length) { p.customParts = p.customParts.concat(extra); this.app.rigChanged(); }
+      const data = PT.normalizeProject(raw, true);
       let n = 0;
       for (const a of data.avatars) {
         this.add(a.name, a.id === data.activeAvatar ? takeLook(data) : (a.look || blankLook()));

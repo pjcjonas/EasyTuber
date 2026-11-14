@@ -148,7 +148,7 @@
       $('btnReset').onclick = async () => {
         if (!confirm('Remove all avatars and uploaded images, and reset every setting?')) return;
         const kept = await this.backupNow('reset');
-        await this.loadProject(PT.defaultProject());
+        await this.loadProject(PT.normalizeProject({}));   // also takes the skeleton back to the built-in parts
         PT.toast(kept ? 'Reset to the placeholder character. The avatar you had is under Stage → Backups.' : 'Reset to the placeholder character.', '', kept ? 7000 : undefined);
       };
 
@@ -202,6 +202,46 @@
       if (!window.isSecureContext) {
         PT.toast('Microphone needs a secure page. Close this tab, run start.bat and use the localhost address it opens.', 'warn', 10000);
       }
+    },
+
+    /* ---------------- custom parts ---------------- */
+    /* After project.customParts changed: rebuild the skeleton, make every avatar's look fit it,
+       and redraw the lists. Undo history is dropped, since it describes the old skeleton. */
+    rigChanged() {
+      const p = this.project;
+      p.customParts = PT.applyRig(p);
+      PT.syncLook(p);
+      for (const a of p.avatars) if (a.look) PT.syncLook(a.look);
+      for (const id of Object.keys(PT.Assets.user)) if (!PT.PART[id]) delete PT.Assets.user[id];
+      if (this.selected && this.selected !== 'root' && !PT.PART[this.selected]) this.selected = null;
+      PT.Editor.resetHistory();
+      this.changed({ structure: true });
+    },
+    addPart(label = 'New part', parent = 'face') {
+      const p = this.project;
+      if (p.customParts.length >= PT.MAX_CUSTOM_PARTS) { PT.toast(`That is the most parts you can add (${PT.MAX_CUSTOM_PARTS}).`, 'warn'); return null; }
+      const id = 'c_' + Math.random().toString(36).slice(2, 10).padEnd(4, '0');
+      p.customParts.push({ id, label, parent, sway: 1 });
+      this.rigChanged();
+      if (!PT.PART[id]) return null;
+      this.select(id);
+      return id;
+    },
+    // label and parent change the skeleton; sway only how the part moves
+    updatePart(id, change) {
+      const c = this.project.customParts.find((x) => x.id === id);
+      if (!c) return;
+      Object.assign(c, change);
+      if ('label' in change || 'parent' in change) this.rigChanged();
+      else { PT.PART[id].sway = PT.cleanCustomParts([c])[0].sway; c.sway = PT.PART[id].sway; this.changed({ settings: true }); }
+    },
+    // parts that hung from it now hang from what it hung from
+    removePart(id) {
+      const p = this.project, gone = p.customParts.find((x) => x.id === id);
+      if (!gone) return;
+      for (const c of p.customParts) if (c.parent === id) c.parent = gone.parent;
+      p.customParts = p.customParts.filter((x) => x !== gone);
+      this.rigChanged();
     },
 
     /* Once, when the editor starts: say so if a newer version is out. Off with the Stage tab setting. */
