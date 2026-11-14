@@ -105,6 +105,10 @@
     get project() { return PT.App.project; },
 
     list() { return this.project.avatars; },
+    // My skins: the looks of your main character. Avatars: characters of their own (for actions).
+    skins() { return this.project.avatars.filter((a) => a.kind !== 'avatar'); },
+    others() { return this.project.avatars.filter((a) => a.kind === 'avatar'); },
+    lookOf(a) { return a.look ? a.look : a.id === this.project.activeAvatar ? takeLook(this.project) : blankLook(); },
     active() { return this.project.avatars.find((a) => a.id === this.project.activeAvatar) || null; },
     activeName() { const a = this.active(); return a ? a.name : 'Random mix'; },
     // every avatar's look, the active one's from the project itself
@@ -113,7 +117,7 @@
     /* ---- global hotkeys ---- */
     bindings() {
       const p = this.project, out = [];
-      for (const a of p.avatars) if (a.hotkey) out.push({ accelerator: a.hotkey, action: 'avatar:' + a.id });
+      for (const a of this.skins()) if (a.hotkey) out.push({ accelerator: a.hotkey, action: 'avatar:' + a.id });
       if (p.hotkeys.next) out.push({ accelerator: p.hotkeys.next, action: 'next' });
       if (p.hotkeys.random) out.push({ accelerator: p.hotkeys.random, action: 'random' });
       // actions: only the ones whose file is loaded
@@ -161,16 +165,16 @@
       if (this.busy) { this.queued = target; return; }
       const p = this.project;
       let id = target;
-      if (target === 'next') {
-        const list = p.avatars, i = list.findIndex((a) => a.id === p.activeAvatar);
-        if (list.length < 2 && i >= 0) return;
+      if (target === 'next') {                          // the next skin (from an avatar: the first skin)
+        const list = this.skins(), i = list.findIndex((a) => a.id === p.activeAvatar);
+        if (!list.length || (list.length < 2 && i >= 0)) return;
         id = list[(i + 1) % list.length].id;
       }
       if (id !== RANDOM) {
         if (!p.avatars.some((a) => a.id === id)) return;
         if (id === p.activeAvatar) return;
-      } else if (p.avatars.length < 2) {
-        if (toast) PT.toast('Add a second avatar to mix them. Random mix takes each part from a different avatar.', 'warn', 6000);
+      } else if (this.skins().length < 2) {
+        if (toast) PT.toast('Add a second skin to mix them. Random mix takes each part from a different skin.', 'warn', 6000);
         return;
       }
 
@@ -183,7 +187,7 @@
         }
         let look;
         if (id === RANDOM) {
-          const avatarLooks = this.looks(), base = this.active() ? takeLook(p) : avatarLooks[0];
+          const skins = this.skins(), avatarLooks = skins.map((a) => this.lookOf(a)), base = this.active() ? takeLook(p) : avatarLooks[0];
           const same = (a, b) => !!b && a.join() === b.join();
           let m;
           for (let tries = 0; tries < 8; tries++) {      // try not to land on the mix that's showing
@@ -193,7 +197,7 @@
           }
           look = m.look;
           this.lastPicks = m.picks;
-          p.mix = Object.fromEntries(mixGroups().map((g, i) => [g[0], p.avatars[m.picks[i]].id]));
+          p.mix = Object.fromEntries(mixGroups().map((g, i) => [g[0], skins[m.picks[i]].id]));
         } else p.mix = null;
         const cur = this.active();
         if (cur) cur.look = takeLook(p);                // a random mix on screen is simply dropped
@@ -226,7 +230,7 @@
     async buildMix(partId, avatarId) {
       const p = this.project, group = this.groupOf(partId), src = p.avatars.find((a) => a.id === avatarId);
       if (!group || !src || this.busy) return false;
-      if (p.avatars.length < 2) { PT.toast('Add a second avatar to mix them.', 'warn', 5000); return false; }
+      if (p.avatars.length < 2) { PT.toast('Add a second skin to mix them.', 'warn', 5000); return false; }
       this.busy = true;
       try {
         const cur = this.active();
@@ -247,17 +251,27 @@
     },
 
     /* ---- managing the list ---- */
-    add(name, look) {
+    add(name, look, kind = 'skin') {
       const p = this.project;
-      const a = { id: uid(), name: (name || `Avatar ${p.avatars.length + 1}`).slice(0, 60), hotkey: '', look };
+      const n = p.avatars.filter((a) => (a.kind === 'avatar') === (kind === 'avatar')).length + 1;
+      const a = { id: uid(), name: (name || (kind === 'avatar' ? `Avatar ${n}` : `Skin ${n}`)).slice(0, 60), kind: kind === 'avatar' ? 'avatar' : 'skin', hotkey: '', look };
       p.avatars.push(a);
       return a;
     },
-    async addBlank() { const a = this.add(null, blankLook()); await this.switchTo(a.id, { toast: false }); },
-    async duplicate() {
+    async addBlank(kind = 'skin') { const a = this.add(null, blankLook(), kind); await this.switchTo(a.id, { toast: false }); },
+    // a copy of what is on screen; kind: which list it goes in (the same as the one on screen if left out)
+    async duplicate(kind) {
       const cur = this.active();
-      const a = this.add(`${cur ? cur.name : 'Random mix'} copy`, clone(takeLook(this.project)));
+      const a = this.add(`${cur ? cur.name : 'Random mix'} copy`, clone(takeLook(this.project)), kind || (cur ? cur.kind : 'skin'));
       await this.switchTo(a.id, { toast: false });
+    },
+    // move between My skins and Avatars. An avatar has no switching hotkey (it will be played by actions).
+    async setKind(a, kind) {
+      a.kind = kind === 'avatar' ? 'avatar' : 'skin';
+      if (a.kind === 'avatar') a.hotkey = '';
+      if (this.project.mix) for (const [k, v] of Object.entries(this.project.mix)) if (v === a.id && a.kind === 'avatar') delete this.project.mix[k];
+      this.app.changed({ settings: true });
+      await this.register();
     },
     // the random mix on screen becomes a real avatar
     keepMix() {
@@ -275,7 +289,9 @@
       if (p.avatars.length < 2) return;
       // a switch in progress would leave the deleted avatar on screen
       if (this.busy) { PT.toast('Wait for the avatar switch to finish, then delete.', 'warn'); return; }
-      if (a.id === p.activeAvatar) await this.switchTo(p.avatars.find((x) => x !== a).id, { animate: false, toast: false });
+      // what goes on screen instead: a skin if there is one
+      const next = this.skins().find((x) => x !== a) || p.avatars.find((x) => x !== a);
+      if (a.id === p.activeAvatar) await this.switchTo(next.id, { animate: false, toast: false });
       p.avatars = p.avatars.filter((x) => x !== a);
       this.app.changed({ settings: true });
       await this.register();
@@ -314,7 +330,7 @@
       if (lib.length) p.library = (p.library || []).concat(lib).slice(0, PT.Library ? PT.Library.MAX : 500);
       let n = 0;
       for (const a of data.avatars) {
-        this.add(a.name, a.id === data.activeAvatar ? takeLook(data) : (a.look || blankLook()));
+        this.add(a.name, a.id === data.activeAvatar ? takeLook(data) : (a.look || blankLook()), a.kind);
         n++;
       }
       if (data.activeAvatar === RANDOM) { this.add('Imported mix', takeLook(data)); n++; }

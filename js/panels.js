@@ -166,22 +166,22 @@
 
     // One row per part group: which avatar it comes from. Changing one shows the result on the stage.
     mixBuilder() {
-      const A = PT.Avatars, p = this.project;
-      if (p.avatars.length < 2) return this.note('Add a second avatar, then choose here which avatar each part comes from.');
-      const looks = A.looks(), random = p.activeAvatar === A.RANDOM;
+      const A = PT.Avatars, p = this.project, skins = A.skins();
+      if (skins.length < 2) return this.note('Add a second skin, then choose here which skin each part comes from.');
+      const looks = skins.map((a) => A.lookOf(a)), random = p.activeAvatar === A.RANDOM;
       const wrap = el('div', {},
-        this.note('Choose which avatar each part comes from. The stage and OBS show the result straight away. Your avatars are not changed.'));
+        this.note('Choose which skin each part comes from. The stage and OBS show the result straight away. Your skins are not changed.'));
       for (const group of A.MIX_GROUPS) {
         const from = A.sourceOf(group);
         const sel = el('select', { 'aria-label': A.groupLabel(group) + ' comes from' },
           from ? null : el('option', { value: '' }, '—'),
-          ...p.avatars.map((a, i) => el('option', { value: a.id }, a.name + (A.hasArt(looks[i], group[0]) ? '' : ' (no image)'))));
+          ...skins.map((a, i) => el('option', { value: a.id }, a.name + (A.hasArt(looks[i], group[0]) ? '' : ' (no image)'))));
         sel.value = from;
         sel.addEventListener('change', async () => { if (sel.value) { await A.buildMix(group[0], sel.value); this.renderAvatars(); } });
         wrap.append(el('div', { class: 'mix-row', 'data-group': group[0] }, el('span', { class: 'mix-label' }, A.groupLabel(group)), sel));
       }
       wrap.append(el('div', { class: 'row', style: { marginTop: '8px' } },
-        el('button', { class: 'btn', disabled: !random, title: random ? 'Keep the mix on screen as a new avatar' : 'Change a part above first', onclick: () => A.keepMix() }, 'Save as avatar')));
+        el('button', { class: 'btn', disabled: !random, title: random ? 'Keep the mix on screen as a new skin' : 'Change a part above first', onclick: () => A.keepMix() }, 'Save as skin')));
       return wrap;
     },
 
@@ -808,25 +808,31 @@
       if (this.capture) this.capture.cancel();
       const A = PT.Avatars, p = this.project, app = this.app;
 
-      const rows = el('div', { class: 'avatar-list' });
-      for (const a of p.avatars) {
-        const on = a.id === p.activeAvatar;
-        const name = el('input', { class: 'av-name', value: a.name, maxlength: 60, title: 'Avatar name' });
+      // one row: name, on screen / Show (Edit for an avatar), hotkey (skins), move to the other list, delete
+      const row = (a) => {
+        const on = a.id === p.activeAvatar, skin = a.kind !== 'avatar';
+        const name = el('input', { class: 'av-name', value: a.name, maxlength: 60, title: skin ? 'Skin name' : 'Avatar name' });
         name.addEventListener('change', () => A.rename(a, name.value));
         name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
-        rows.append(el('div', { class: 'avatar-row' + (on ? ' active' : '') },
+        return el('div', { class: 'avatar-row' + (on ? ' active' : ''), 'data-avatar': a.id },
           el('div', { class: 'av-top' },
             el('span', { class: 'av-dot', title: on ? 'On screen now' : '' }),
             name,
             on ? el('span', { class: 'av-badge' }, 'On screen')
-              : el('button', { class: 'btn small', title: 'Switch to this avatar', onclick: () => A.switchTo(a.id) }, 'Show')),
+              : el('button', { class: 'btn small', title: skin ? 'Switch to this skin' : 'Put it on screen to edit it (OBS shows it too)', onclick: () => A.switchTo(a.id) }, skin ? 'Show' : 'Edit')),
           el('div', { class: 'av-bottom' },
-            this.hotkeyRow(a, a.hotkey),
+            skin ? this.hotkeyRow(a, a.hotkey) : el('span', { class: 'note', style: { margin: 0, flex: 1 } }, 'Not linked to an action yet'),
             el('button', {
-              class: 'icon-btn', title: 'Delete this avatar', disabled: p.avatars.length < 2,
+              class: 'btn small', title: skin ? 'Move to Avatars' : 'Move to My skins',
+              onclick: () => A.setKind(a, skin ? 'avatar' : 'skin'),
+            }, skin ? '→ Avatars' : '← Skins'),
+            el('button', {
+              class: 'icon-btn', title: skin ? 'Delete this skin' : 'Delete this avatar', disabled: p.avatars.length < 2,
               onclick: () => { if (confirm(`Delete "${a.name}" and its images?`)) A.remove(a); },
-            }, '🗑'))));
-      }
+            }, '🗑')));
+      };
+      const rows = el('div', { class: 'avatar-list' }, ...A.skins().map(row));
+      const otherRows = el('div', { class: 'avatar-list' }, ...A.others().map(row));
 
       const fileIn = el('input', { type: 'file', accept: '.json,application/json', hidden: true });
       fileIn.addEventListener('change', async () => {
@@ -840,26 +846,33 @@
 
       host.innerHTML = '';
       host.append(
-        this.section('Your avatars',
-          random ? el('p', { class: 'note' }, '🎲 A random mix is on screen. Keep it as an avatar, or switch to one below.') : null,
+        this.section('My skins',
+          this.note('The looks of your main character: outfits, moods, seasons. Switch between them with a hotkey, Next skin or Random mix.'),
+          random ? el('p', { class: 'note' }, '🎲 A random mix is on screen. Keep it as a skin, or switch to one below.') : null,
           rows,
           el('div', { class: 'row' },
-            el('button', { class: 'btn', title: 'Start a new avatar from the placeholder', onclick: () => A.addBlank() }, '+ New avatar'),
-            el('button', { class: 'btn', title: 'Copy what is on screen into a new avatar, e.g. for an outfit change', onclick: () => A.duplicate() }, 'Duplicate')),
+            el('button', { class: 'btn', title: 'Start a new skin from the placeholder', onclick: () => A.addBlank('skin') }, '+ New skin'),
+            el('button', { class: 'btn', title: 'Copy what is on screen into a new skin, e.g. for an outfit change', onclick: () => A.duplicate('skin') }, 'Duplicate as skin')),
           el('div', { class: 'row', style: { marginTop: '6px' } },
-            el('button', { class: 'btn', title: 'Add the avatars from a saved .easytuber.json file', onclick: () => fileIn.click() }, 'Add from file…'), fileIn),
-          this.note('Each avatar has its own images, positions and draw order. Motion, mic and stage settings are shared.')),
+            el('button', { class: 'btn', title: 'Add the skins and avatars from a saved .easytuber.json file', onclick: () => fileIn.click() }, 'Add from file…'), fileIn),
+          this.note('Each one has its own images, positions and draw order. Motion, mic and stage settings are shared.')),
+        this.section('Avatars',
+          this.note('Characters of their own: a pet, a sidekick, a guest. Later they can be brought in by actions. Edit puts one on screen so you can work on it.'),
+          A.others().length ? otherRows : this.note('None yet.'),
+          el('div', { class: 'row' },
+            el('button', { class: 'btn', title: 'Start a new avatar from the placeholder', onclick: () => A.addBlank('avatar') }, '+ New avatar'),
+            el('button', { class: 'btn', title: 'Copy what is on screen into a new avatar', onclick: () => A.duplicate('avatar') }, 'Duplicate as avatar'))),
         this.section('Random mix',
-          this.note('Builds a new look from your avatars: each part (both pieces of an arm together) comes from a random avatar. Works best when your avatars were drawn on the same canvas.'),
+          this.note('Builds a new look from your skins: each part (both pieces of an arm together) comes from a random skin. Works best when your skins were drawn on the same canvas.'),
           this.hotkeyRow('random', p.hotkeys.random),
           el('div', { class: 'row', style: { marginTop: '8px' } },
             el('button', { class: 'btn', onclick: () => A.switchTo(A.RANDOM) }, '🎲 Mix now'),
-            random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new avatar', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
+            random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new skin', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
         this.section('Expressions', this.expressionList()),
         this.section('Parts library', this.libraryList()),
         this.section('Build a mix', this.mixBuilder()),
-        this.section('Next avatar',
-          this.note('Steps through your avatars in order.'),
+        this.section('Next skin',
+          this.note('Steps through your skins in order.'),
           this.hotkeyRow('next', p.hotkeys.next)),
         this.section('Switch animation',
           this.check('Parts drop off the screen, then the new avatar climbs back in', () => p.switchFx, (v) => { p.switchFx = v; app.changed({ settings: true }); }),
@@ -946,7 +959,7 @@
       const p = this.project, app = this.app;
       if (!p.sequences.length) return document.createDocumentFragment();   // nothing to show
       const labels = new Map([
-        ...defs.map((d) => [d.id, d.label]), ['next', 'Next avatar'], ['random', 'Random mix'],
+        ...defs.map((d) => [d.id, d.label]), ['next', 'Next skin'], ['random', 'Random mix'],
         ...p.avatars.map((a) => ['avatar:' + a.id, 'Show ' + a.name]),
       ]);
       const address = (s) => {
@@ -1022,7 +1035,7 @@
       const p = this.project;
       const choices = [
         ...defs.map((d) => [d.id, d.label]),
-        ['next', 'Next avatar'], ['random', 'Random mix'],
+        ['next', 'Next skin'], ['random', 'Random mix'],
         ...p.avatars.map((a) => ['avatar:' + a.id, 'Show ' + a.name]),
       ];
       const labels = new Map(choices);

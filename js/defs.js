@@ -227,7 +227,7 @@
     stage: { ...PT.DEFAULT_STAGE },
     /* Avatar layouts. The active one's look lives in parts/order/root/sheets above (look: null);
        every other avatar keeps its own look here. activeAvatar can also be 'random' (a random mix). */
-    avatars: [{ id: 'a1', name: 'Avatar 1', hotkey: '', look: null }],
+    avatars: [{ id: 'a1', name: 'Avatar 1', kind: 'skin', hotkey: '', look: null }],
     activeAvatar: 'a1',
     mix: null,                           // set while a mix is on screen (see normalizeProject)
     /* Expressions: named faces (happy, angry…) shared by every avatar. A part's image for one is
@@ -276,8 +276,10 @@
     const seen = new Set();
     out.avatars = (Array.isArray(p.avatars) ? p.avatars : [])
       .filter((a) => a && typeof a.id === 'string' && a.id && !seen.has(a.id) && seen.add(a.id))
-      .map((a) => ({ id: a.id, name: str(a.name, 60) || 'Avatar', hotkey: str(a.hotkey, 64), look: a.look && typeof a.look === 'object' ? a.look : null }));
-    if (!out.avatars.length) out.avatars = [{ id: 'a1', name: str(p.name, 60) || 'Avatar 1', hotkey: '', look: null }];
+      // kind: 'skin' = a look of your main character (switched by hotkey, Next, Random mix);
+      // 'avatar' = a character of its own, to be linked to actions
+      .map((a) => ({ id: a.id, name: str(a.name, 60) || 'Avatar', kind: a.kind === 'avatar' ? 'avatar' : 'skin', hotkey: a.kind === 'avatar' ? '' : str(a.hotkey, 64), look: a.look && typeof a.look === 'object' ? a.look : null }));
+    if (!out.avatars.length) out.avatars = [{ id: 'a1', name: str(p.name, 60) || 'Avatar 1', kind: 'skin', hotkey: '', look: null }];
     // 'random' only when every avatar has its own look stored (else one avatar's look is the one above)
     const known = out.avatars.some((a) => a.id === p.activeAvatar);
     const randomOk = p.activeAvatar === 'random' && out.avatars.every((a) => a.look);
