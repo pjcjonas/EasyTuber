@@ -100,6 +100,7 @@
       };
       look(project);
       for (const a of (project && project.avatars) || []) look(a && a.look);
+      for (const item of (project && Array.isArray(project.library) ? project.library : [])) for (const st of Object.keys((item && item.images) || {})) slots.push([item.images, st]);
       return slots;
     },
 

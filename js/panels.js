@@ -185,26 +185,91 @@
       return wrap;
     },
 
-    // "Copy from another avatar" for the selected part (both pieces of an arm go together)
-    copyFromAvatar(id) {
-      const A = PT.Avatars, p = this.project, group = A.groupOf(id);
-      if (!group || p.avatars.length < 2) return null;
-      const looks = A.looks();
-      const others = p.avatars.map((a, i) => ({ a, has: A.hasArt(looks[i], group[0]) })).filter((x) => x.a.id !== p.activeAvatar && x.has);
-      if (!others.length) return null;
-      const what = A.groupLabel(group);
-      const sel = el('select', { 'aria-label': 'Copy from another avatar', title: `Replace this avatar's ${what} with another avatar's` },
-        el('option', { value: '' }, `Copy ${what} from…`),
-        ...others.map((x) => el('option', { value: x.a.id }, x.a.name)));
-      sel.addEventListener('change', async () => {
-        const src = p.avatars.find((a) => a.id === sel.value);
-        sel.value = '';
-        if (!src) return;
-        if (A.active() && !confirm(`Replace the ${what} of "${A.activeName()}" with the one from "${src.name}"?`)) return;
-        if (await A.copyGroup(id, src.id)) PT.toast(`Copied ${what} from "${src.name}".`);
-      });
-      return el('div', { class: 'row', style: { marginTop: '6px' } }, sel);
+    // a tile in a gallery: a picture, a caption, and what clicking it does
+    tile(url, caption, title, onclick, extra = null) {
+      return el('button', { class: 'lib-tile', title, onclick },
+        el('span', { class: 'lib-pic' }, url ? el('img', { src: PT.imageSrc(url), alt: '', loading: 'lazy', draggable: 'false' }) : '?'),
+        el('span', { class: 'lib-cap' }, caption), extra);
     },
+
+    /* "Swap part": the same part of your other avatars, and the library, as pictures to click.
+       Clicking one puts it in place of this avatar's part (Undo swap puts the old one back). */
+    swapPart(id) {
+      const L = PT.Library, app = this.app, def = PT.PART[id];
+      if (!L) return '';
+      const all = !!this.libAll;
+      const avatars = L.fromAvatars(id), items = L.for(id, all);
+      const apply = async (src, what) => { if (await L.apply(id, src)) PT.toast(`${def.label}: now ${what}. Undo swap puts the old one back.`, '', 5000); };
+      const grid = el('div', { class: 'lib-grid' },
+        ...avatars.map(({ avatar, part }) => this.tile(L.cover(part.images, id), avatar.name, `Use ${avatar.name}'s ${def.label.toLowerCase()}`,
+          () => apply({ images: part.images, adj: part.adj, place: part, part: id }, `from ${avatar.name}`))),
+        ...items.map((x) => this.tile(L.cover(x.images, x.part || id), x.name, x.part && x.part !== id ? `Made for ${PT.partName(PT.PART[x.part])}: it is fitted into place` : 'From your parts library',
+          () => apply(x, `"${x.name}"`), el('span', { class: 'lib-other' }, x.part && x.part !== id ? 'Library · ' + PT.PART[x.part].label : 'Library'))));
+      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      fileIn.addEventListener('change', async () => {
+        const n = await L.upload(fileIn.files, id); fileIn.value = '';
+        if (n.length) { PT.toast(`Added ${n.length} to the library. Click it to use it.`); this.renderInspector(); this.renderAvatars(); }
+      });
+      const undo = L.undo && L.undo.id === id && L.undo.avatar === this.project.activeAvatar;
+      this.makeDroppable(grid, async (files) => { const n = await L.upload(files, id); if (n.length) { this.renderInspector(); this.renderAvatars(); } });
+      return this.section('Swap part',
+        avatars.length || items.length ? grid : this.note(`Nothing to swap in yet. Your other avatars' ${def.label.toLowerCase()} show up here, and so do parts you keep in the library.`),
+        el('label', { class: 'check', style: { marginTop: '6px' } },
+          el('input', { type: 'checkbox', checked: all, onchange: (e) => { this.libAll = e.target.checked; this.renderInspector(); } }),
+          ' Show library parts made for other parts too'),
+        el('div', { class: 'row', style: { marginTop: '6px' } },
+          el('button', { class: 'btn small', disabled: !PT.Assets.hasUser(id), title: 'Keep this part, with its placement, in your parts library', onclick: () => {
+            const x = L.save(id);
+            if (x) { PT.toast(`Saved to the library as "${x.name}".`); this.renderInspector(); this.renderAvatars(); }
+          } }, 'Save to library'),
+          el('button', { class: 'btn small', title: 'Add pictures for this part to the library, without changing the avatar', onclick: () => fileIn.click() }, 'Upload to library…'),
+          undo ? el('button', { class: 'btn small', onclick: async () => { if (await L.undoSwap()) PT.toast('Put the old one back.'); } }, '↩ Undo swap') : null),
+        fileIn);
+    },
+
+    // The parts library in the Avatars tab: every part, grouped by what it is for, to rename,
+    // re-label or delete; and a place to upload many at once
+    libraryList() {
+      const L = PT.Library, p = this.project;
+      if (!L) return this.note('');
+      const list = L.list();
+      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      const add = async (files) => {
+        const n = await L.upload(files, null);
+        if (n.length) { PT.toast(`Added ${n.length} part${n.length === 1 ? '' : 's'} to the library.`); this.renderAvatars(); this.renderInspector(); }
+      };
+      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; await add(f); });
+      const wrap = el('div', {},
+        this.note('Parts kept apart from your avatars, to build new ones from. Select a part on the stage and pick one under Swap part in the Part tab. Pictures are sorted by their file names, like dropped layers (eyes_closed.png goes with the eyes).'));
+      const groups = new Map();
+      for (const x of list) { const k = x.part || ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+      const order = [...PT.PARTS.map((d) => d.id), ''];
+      for (const k of order) {
+        if (!groups.has(k)) continue;
+        wrap.append(el('div', { class: 'group-title' }, k ? PT.partName(PT.PART[k]) : 'Any part'));
+        for (const x of groups.get(k)) {
+          const name = el('input', { type: 'text', class: 'av-name', value: x.name, maxlength: 60, 'aria-label': 'Library part name' });
+          name.addEventListener('change', () => L.rename(x, name.value));
+          const forPart = el('select', { 'aria-label': 'Made for', title: 'Which part it is for' },
+            el('option', { value: '' }, 'Any part'), ...PT.PARTS.map((d) => el('option', { value: d.id }, PT.partName(d))));
+          forPart.value = x.part;
+          forPart.addEventListener('change', () => { L.setPart(x, forPart.value); this.renderAvatars(); this.renderInspector(); });
+          wrap.append(el('div', { class: 'lib-row', 'data-library': x.id },
+            el('span', { class: 'lib-pic small' }, el('img', { src: PT.imageSrc(L.cover(x.images, x.part)), alt: '' })),
+            el('div', { class: 'lib-fields' }, name, forPart),
+            el('button', { class: 'icon-btn', title: 'Delete from the library (your avatars keep what they use)', onclick: () => {
+              if (confirm(`Delete "${x.name}" from the library?`)) { L.remove(x); this.renderAvatars(); this.renderInspector(); }
+            } }, '🗑')));
+        }
+      }
+      if (!list.length) wrap.append(this.note('The library is empty.'));
+      const drop = el('div', { class: 'dropzone small', tabindex: '0', onclick: () => fileIn.click() },
+        el('strong', {}, 'Upload parts…'), el('span', {}, 'or drop pictures here'));
+      this.makeDroppable(drop, add);
+      wrap.append(drop, fileIn);
+      return wrap;
+    },
+
 
     // Name, parent, sway and Delete for one of the user's own parts
     customPartBox(id) {
@@ -340,6 +405,7 @@
               class: 'btn', onclick: () => PT.SheetEditor.forPart(id),
               title: def.states.length > 1 ? 'Crop all frames for this part out of one image' : 'Crop this part out of a bigger image',
             }, (this.project.sheets || []).some((s) => s.boxes.some((b) => b.part === id)) ? 'Edit sprite sheet crop…' : 'From sprite sheet…'))),
+        this.swapPart(id),
         this.frameAdjust(id) || '', // native append() would print a null as the text "null"
         this.section('Position',
           this.field('X', { min: -500, max: 1500, get: () => Math.round(p.x), set: set('x'), title: 'Joint position' }),
@@ -370,7 +436,7 @@
               },
             }, 'Auto-place'),
             id.startsWith('arm') ? el('button', { class: 'btn', title: 'Copy this arm (both segments) to the other side, mirrored', onclick: () => PT.Editor.mirrorArm(id) }, 'Mirror to other arm') : null),
-          this.copyFromAvatar(id)),
+          ),
       );
       mark();
     },
@@ -790,6 +856,7 @@
             el('button', { class: 'btn', onclick: () => A.switchTo(A.RANDOM) }, '🎲 Mix now'),
             random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new avatar', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
         this.section('Expressions', this.expressionList()),
+        this.section('Parts library', this.libraryList()),
         this.section('Build a mix', this.mixBuilder()),
         this.section('Next avatar',
           this.note('Steps through your avatars in order.'),

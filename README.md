@@ -280,7 +280,17 @@ Open the **Avatars** tab:
 * **Set key**, then press the combination you want, such as **Ctrl+Alt+1**. Esc cancels; Backspace removes the key. A key needs Ctrl, Alt or Shift with it, except F-keys and numpad keys, which can be used alone. That's so your normal typing keeps working everywhere.
 * **Random mix** builds a new look from your avatars: each part comes from a random avatar (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as an avatar. Mixing works best when your avatars were drawn on the same canvas, in the same pose.
 * **Build a mix** lets you choose instead of leaving it to chance: one row per part, each with the avatar it comes from. Change a row and the stage and OBS show the result straight away. Your avatars are not changed. **Save as avatar** keeps the mix as a new avatar.
-* **Copy a part from another avatar.** Select a part, and in the **Part** tab under **Tools** choose **Copy … from…**. That part of the avatar on screen is replaced by the other avatar's image and placement.
+* **Swap a part.** Select a part. In the **Part** tab, under **Swap part**, are pictures of that part from each of your other avatars and from your parts library. Click one and it replaces this avatar's part: from an avatar it keeps that avatar's placement; from the library it keeps the placement it was saved with, or is fitted into place. **↩ Undo swap** puts the old one back.
+
+### Parts library
+
+The parts library is a collection of parts kept apart from your avatars, to build new avatars from: hats, eyes, mouths, outfits, a whole arm. It is shared by all your avatars, saved in your avatar file, and included in **Save file**.
+
+* **Save to library** (Part tab, under Swap part) keeps the selected part, with its pictures and placement.
+* **Upload to library…** (Part tab) adds pictures for the selected part, without changing your avatar.
+* **Upload parts…** (Avatars tab, under **Parts library**) adds many pictures at once. They are sorted by file name like dropped layers: `eyes_open.png` and `eyes_closed.png` become one pair of eyes; a picture whose name matches no part becomes a part for *any part*.
+* In the **Parts library** list you can rename a part, change which part it is for, or delete it. Deleting it from the library doesn't take it off an avatar that uses it.
+* To build a new avatar from the library, click **+ New avatar**, then select each part and pick from **Swap part**. Tick **Show library parts made for other parts too** to put, say, a sticker on any part.
 * **Next avatar** steps through your avatars in order with one key.
 * **Switch animation** turns the drop-out / climb-in effect on or off. **Test the animation** plays it here and in OBS.
 
@@ -517,6 +527,7 @@ css/style.css
 js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, the user's own parts (applyRig), default layout and settings, filename routing
 js/psd.js           PSD import: layers to parts (the file is read by js/vendor/ag-psd.js, MIT)
+js/library.js       the parts library, and swapping a part for another avatar's or a library part
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
 js/transition.js    the drop-out / climb-in switch animation

@@ -246,21 +246,6 @@
       return true;
     },
 
-    /* Replace one group of the avatar on screen with another avatar's, for good. */
-    async copyGroup(partId, avatarId) {
-      const p = this.project, group = this.groupOf(partId), src = p.avatars.find((a) => a.id === avatarId);
-      if (!group || !src || !src.look || this.busy) return false;
-      if (p.activeAvatar === RANDOM) return this.buildMix(partId, avatarId);
-      this.busy = true;
-      try {
-        Object.assign(p.parts, groupParts(src.look, group));
-        await PT.Assets.loadProject(p);
-        PT.Editor.resetHistory();
-        this.app.changed({ structure: true });
-      } finally { this.busy = false; }
-      return true;
-    },
-
     /* ---- managing the list ---- */
     add(name, look) {
       const p = this.project;
@@ -323,6 +308,10 @@
       const extra = PT.cleanCustomParts(raw && raw.customParts).filter((c) => !have.has(c.id));
       if (extra.length) { p.customParts = p.customParts.concat(extra); this.app.rigChanged(); }
       const data = PT.normalizeProject(raw, true);
+      // and its library parts join this one's
+      const known = new Set((p.library || []).map((x) => x.id));
+      const lib = data.library.filter((x) => !known.has(x.id));
+      if (lib.length) p.library = (p.library || []).concat(lib).slice(0, PT.Library ? PT.Library.MAX : 500);
       let n = 0;
       for (const a of data.avatars) {
         this.add(a.name, a.id === data.activeAvatar ? takeLook(data) : (a.look || blankLook()));
