@@ -46,6 +46,7 @@ A narrated walkthrough (4:31): uploading your art, lining up the rig, eyes and m
 15. [Shortcuts](#15-shortcuts)
 16. [Troubleshooting](#16-troubleshooting)
 17. [For developers](#17-for-developers)
+18. [License](#18-license)
 
 ---
 
@@ -532,3 +533,18 @@ docs/screenshots/   the pictures in this README
 tests/              npm test (server, avatar, action and camera logic)
 docs/tutorial-thumbnail.jpg  the video tutorial's preview picture
 ```
+
+---
+
+## 18. License
+
+EASY-TUBER was created by [pjcjonas](https://github.com/pjcjonas). It is free software under the [GNU General Public License, version 3](LICENSE), with the additional terms in [NOTICE](NOTICE).
+
+In short:
+
+- You may use it, change it and share it, also for streaming and commercial streams.
+- If you share it or a changed version, it stays under the same licence and you share its source code too.
+- Keep the [NOTICE](NOTICE) file and its credit line, *Based on EASY-TUBER, created by pjcjonas*, and show that credit wherever your version shows its licence or credits.
+- Mark a changed version as changed. Don't present it as the original EASY-TUBER or as made by its author.
+
+The summary is a guide; the [LICENSE](LICENSE) and [NOTICE](NOTICE) files are what count. `js/vendor/ag-psd.js` is a separate project under the MIT License (see `js/vendor/README.md`).
