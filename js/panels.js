@@ -678,33 +678,58 @@
       const timingBox = el('div', {}, ...fields.map((f) => f.row));
       const bad = el('p', { class: 'note warn-text' }, 'Start delay is 0 to 60 s, time between steps 0.1 to 60 s, in tenths. Leave "Auto" to wait for each step to finish.');
 
+      /* Values for the action (a.args), added to the URL as typed, so Streamer.bot variables
+         such as %user% stay as they are for Streamer.bot to fill in. */
+      const values = el('input', {
+        type: 'text', class: 'obs-url', placeholder: 'user=%user%&amount=500', value: this.sbValues || '',
+        'aria-label': 'Values for the action', spellcheck: false,
+      });
+      values.addEventListener('input', () => { this.sbValues = values.value; update(); });
+      const valuesText = () => values.value.trim().replace(/^[?&]+/, '');
+      const valuesOk = () => {
+        const text = valuesText();
+        if (!text) return true;
+        const seen = new Set();
+        return text.split('&').every((pair) => {
+          const key = pair.split('=')[0];
+          if (!/^[\w-]{1,40}$/.test(key) || ['action', 'sequence', 'startDelay', 'delay'].includes(key) || seen.has(key)) return false;
+          seen.add(key);
+          return !/[\s#]/.test(pair);
+        }) && seen.size <= 16;
+      };
+      const badValues = el('p', { class: 'note warn-text' }, 'Write values as name=value, joined with &. Names are letters, digits, - and _, each used once. No spaces or #.');
+
       const build = (useSeq) => {
         const u = new URL('/api/streamerbot', location.origin);
         u.hostname = '127.0.0.1';
-        if (!useSeq) { u.searchParams.set('action', pick.value); return u; }
-        u.searchParams.set('sequence', seq.join(','));
-        for (const f of fields) if (f.input.value !== '') u.searchParams.set(f.key, String(f.input.valueAsNumber));
-        return u;
+        if (!useSeq) u.searchParams.set('action', pick.value);
+        else {
+          u.searchParams.set('sequence', seq.join(','));
+          for (const f of fields) if (f.input.value !== '') u.searchParams.set(f.key, String(f.input.valueAsNumber));
+        }
+        return u.href + (valuesText() ? '&' + valuesText() : '');
       };
       const test = async (useSeq) => {
-        const u = build(useSeq);
+        const u = new URL(build(useSeq));
         u.hostname = location.hostname;          // same origin as this page
         if (this.app.mode === 'edit') this.app.setMode('live');
         try { await PT.Storage.runActionUrl(u); PT.toast(useSeq ? 'Sequence started' : 'Playing ' + labels.get(pick.value)); } catch (e) { PT.toast('Could not run it: ' + e.message, 'error'); }
       };
       const add = el('button', { class: 'btn small', onclick: () => { seq.push(pick.value); update(); } }, 'Add to sequence');
+      const testOne = el('button', { class: 'btn small', onclick: () => test(false) }, '▶ Test');
       const testSeq = el('button', { class: 'btn small', onclick: () => test(true) }, '▶ Test sequence');
       const clear = el('button', { class: 'btn small', onclick: () => { seq.length = 0; update(); } }, 'Clear');
       const seqRow = el('div', { class: 'row' }, testSeq, clear);
 
       const update = () => {
         const has = seq.length > 0;
-        const invalid = has && fields.some((f) => !f.input.validity.valid);
-        url.value = invalid ? '' : build(has).href;
-        copy.disabled = testSeq.disabled = invalid;
+        const badTiming = has && fields.some((f) => !f.input.validity.valid), invalid = badTiming || !valuesOk();
+        url.value = invalid ? '' : build(has);
+        copy.disabled = testSeq.disabled = testOne.disabled = invalid;
         add.disabled = seq.length >= 8;
         list.hidden = seqRow.hidden = timingBox.hidden = !has;
-        bad.hidden = !invalid;
+        bad.hidden = !badTiming;
+        badValues.hidden = valuesOk();
         list.replaceChildren(...seq.map((v, i) => el('li', {}, labels.get(v) + ' ',
           el('button', { class: 'icon-btn', title: 'Remove this step', onclick: () => { seq.splice(i, 1); update(); } }, '✕'))));
       };
@@ -715,8 +740,12 @@
         this.note('Pick an action, or build a sequence of up to 8 steps. The URL plays the sequence when there is one.'),
         pick,
         el('div', { class: 'row', style: { marginTop: '6px' } },
-          el('button', { class: 'btn small', onclick: () => test(false) }, '▶ Test'), add),
+          testOne, add),
         list, timingBox, bad, seqRow,
+        el('div', { class: 'field', style: { marginTop: '8px' } },
+          el('label', {}, 'Values for the action (optional)'), values),
+        this.note('For actions that use them, such as a name to show. Streamer.bot fills in its own variables, like %user%.'),
+        badValues,
         el('div', { class: 'obs-row', style: { marginTop: '8px' } }, url, copy),
         el('ol', { class: 'help-list' },
           el('li', {}, 'In Streamer.bot on this computer, add a "Fetch URL" sub-action and paste the URL.'),

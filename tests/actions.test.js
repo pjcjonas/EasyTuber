@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const vm = require('node:vm');
-const { start, validBinding } = require('../electron/server');
+const { start, validBinding, actionArgs } = require('../electron/server');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -403,4 +403,68 @@ test('without an actions folder only the app\'s files are listed', async (t) => 
   assert.equal((await request(srv.port, 'GET', '/user-actions/x.js')).status, 404);
   const json = { 'Content-Type': 'application/json' };
   assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: 'actions' }), json)).status, 501);
+});
+
+/* ---------------- values for an action (a.args) ---------------- */
+
+test('a play carries its values to every hook as a.args, text only and read-only', () => {
+  const PT = loadPT();
+  let seen = null;
+  PT.Actions.define({ id: 'hi', duration: 1000, start(a) { seen = a.args; }, pose(a) { a.state.user = a.args.user; return null; } });
+  const p = PT.normalizeProject({ parts: {} });
+
+  PT.Actions.play('hi', { n: 'a', seed: 1, args: { user: 'Bob', amount: 500, 'bad key': 'x', obj: { a: 1 }, long: 'x'.repeat(300) } }, p, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(seen)), { user: 'Bob', amount: '500', long: 'x'.repeat(200) });
+  assert.ok(Object.isFrozen(seen));
+  PT.Actions.update(10, p);
+  assert.equal(PT.Actions.running[0].state.user, 'Bob');
+
+  // no values: still an object, so a.args.user is simply undefined
+  for (const args of [undefined, null, 'text', [1, 2]]) {
+    PT.Actions.play('hi', { n: 'n' + String(args), seed: 1, args }, p, 0);
+    assert.deepEqual(JSON.parse(JSON.stringify(seen)), {});
+  }
+  assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.newPlay('hi', { user: 'Ann' }).args)), { user: 'Ann' });
+  assert.equal('args' in PT.Actions.newPlay('hi'), false);
+});
+
+test('actionArgs reads the values from a Streamer.bot URL and refuses bad ones', () => {
+  const args = (q) => actionArgs(new URLSearchParams(q));
+  assert.equal(args('action=wave'), null);
+  assert.equal(args('sequence=a,b&startDelay=1&delay=2'), null);
+  assert.deepEqual(args('action=wave&user=Bob%20Smith&amount=500&empty='), { user: 'Bob Smith', amount: '500', empty: '' });
+  assert.deepEqual(args('action=wave&user=%25user%25'), { user: '%user%' });
+  assert.equal(typeof args('action=wave&bad%20key=1'), 'string');
+  assert.equal(typeof args('action=wave&__proto__=1'), 'string');
+  assert.equal(typeof args('action=wave&user=a&user=b'), 'string');
+  assert.equal(typeof args('action=wave&user=' + 'x'.repeat(201)), 'string');
+  assert.equal(typeof args('action=wave&' + Array.from({ length: 17 }, (_, i) => `k${i}=1`).join('&')), 'string');
+  assert.equal(typeof args('action=wave&' + Array.from({ length: 16 }, (_, i) => `k${i}=1`).join('&')), 'object');
+});
+
+test('/api/streamerbot passes the values on with the action, and to every action in a sequence', async (t) => {
+  const { sse, setCatalog, sb } = await server(t, 18850);
+  await setCatalog([{ id: 'wave', label: 'Wave', duration: 100 }, { id: 'bow', label: 'Bow', duration: 100 }]);
+
+  assert.equal((await sb('action=wave&user=Bob&amount=500')).status, 202);
+  let ev = (await sse.waitFor(1))[0];
+  assert.equal(ev.data.id, 'wave');
+  assert.deepEqual(ev.data.args, { user: 'Bob', amount: '500' });
+
+  assert.equal((await sb('action=wave')).status, 202);
+  ev = (await sse.waitFor(2))[1];
+  assert.equal('args' in ev.data, false);
+
+  assert.equal((await sb('sequence=wave,next,bow&delay=0.1&user=Ann')).status, 202);
+  const evs = await sse.waitFor(5);
+  assert.deepEqual(evs.slice(2).map((e) => [e.event, e.data.id || e.data.action, e.data.args]), [
+    ['live', 'wave', { user: 'Ann' }], ['hotkey', 'next', undefined], ['live', 'bow', { user: 'Ann' }],
+  ]);
+
+  const bad = await sb('action=wave&bad%20key=1');
+  assert.equal(bad.status, 400);
+  assert.match(JSON.parse(bad.body).error, /bad key/);
+  assert.equal((await sb('action=wave&user=a&user=b')).status, 400);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(sse.events.length, 5);
 });

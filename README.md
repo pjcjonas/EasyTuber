@@ -278,6 +278,8 @@ Only add action files you trust. An action is a small program that runs inside E
 2. Click **Copy** to copy the address.
 3. In Streamer.bot on the same computer, add a **Fetch URL** sub-action and paste the address. Add the header `X-EasyTuber-Control` with the value `streamerbot`.
 
+4. Some actions use values, such as a name to show. Type them in **Values for the action**, for example `user=%user%&amount=500`, and they are added to the address. Streamer.bot fills in its own variables, like `%user%`, when it sends it.
+
 Keep EASY-TUBER running while you stream.
 
 **Write your own.** [js/actions/README.md](js/actions/README.md) describes the file: how to move parts, change the eyes and mouth, and draw in front of or behind the avatar.

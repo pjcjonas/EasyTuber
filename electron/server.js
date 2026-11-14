@@ -28,6 +28,26 @@ const AVATAR_ACTION = /^(next|random|avatar:[\w-]{1,40})$/;
 const ACTION_ID = /^[\w-]{1,40}$/;
 const SWITCH_MS = 1800;        // an avatar switch in a sequence: drop out + climb back in
 const MAX_STEPS = 8;
+const RESERVED = new Set(['action', 'sequence', 'startDelay', 'delay']);   // the URL's own options
+const ARG_KEY = /^[\w-]{1,40}$/;
+const MAX_ARGS = 16, MAX_ARG_LENGTH = 200;
+
+/* Values for the action, from the rest of a Streamer.bot URL: ?action=wave&user=Bob&amount=500
+   gives { user: 'Bob', amount: '500' }. Returns the values (null when there are none), or a
+   string saying what is wrong. */
+function actionArgs(params) {
+  const out = {};
+  let count = 0;
+  for (const [key, value] of params) {
+    if (RESERVED.has(key)) continue;
+    if (!ARG_KEY.test(key) || key === '__proto__') return `"${key.slice(0, 40)}" is not a name an action value can have (letters, digits, - and _)`;
+    if (key in out) return `"${key}" is given twice`;
+    if (value.length > MAX_ARG_LENGTH) return `"${key}" is longer than ${MAX_ARG_LENGTH} characters`;
+    if (++count > MAX_ARGS) return `An action takes up to ${MAX_ARGS} values`;
+    out[key] = value;
+  }
+  return count ? out : null;
+}
 function validBinding(b) {
   if (!b || typeof b.accelerator !== 'string' || typeof b.action !== 'string') return false;
   if (b.accelerator.length > 64 || !(AVATAR_ACTION.test(b.action) || /^action:[\w-]{1,40}$/.test(b.action))) return false;
@@ -88,25 +108,27 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
     if (AVATAR_ACTION.test(name)) return { name, event: 'hotkey', wait: SWITCH_MS };
     return null;
   };
-  const playStep = (step) => {
+  const playStep = (step, args = null) => {
     if (step.event === 'hotkey') return broadcast('hotkey', { action: step.name });
-    broadcast('live', {
+    const msg = {
       type: 'action', id: step.name,
       n: Date.now().toString(36) + '-' + (++nonce).toString(36), seed: Math.floor(Math.random() * 4294967296),
-    });
+    };
+    if (args) msg.args = args;   // values from the URL, read by the action as a.args
+    broadcast('live', msg);
   };
   // steps play one after another: each waits for the one before to finish, or for `delay` ms if given
-  const runSequence = (steps, { startDelay = 0, delay } = {}) => {
+  const runSequence = (steps, { startDelay = 0, delay, args = null } = {}) => {
     const next = (i, wait) => {
       if (i >= steps.length) { sequenceTimer = null; return; }
       sequenceTimer = setTimeout(() => {
-        playStep(steps[i]);
+        playStep(steps[i], args);
         next(i + 1, delay ?? steps[i].wait);
       }, wait);
       if (sequenceTimer.unref) sequenceTimer.unref();
     };
     if (startDelay > 0) next(0, startDelay);
-    else { playStep(steps[0]); next(1, delay ?? steps[0].wait); }
+    else { playStep(steps[0], args); next(1, delay ?? steps[0].wait); }
   };
   /* a global hotkey press (main.js): actions play straight from here, avatar switches go to the editor */
   const trigger = (action) => {
@@ -234,6 +256,7 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
       /* Streamer.bot (Fetch URL sub-action), or the editor's Test button:
            /api/streamerbot?action=<id>                       one action, or next / random / avatar:<id>
            /api/streamerbot?sequence=a,b,c&startDelay=1&delay=2.5   up to 8 steps, timing in seconds
+           /api/streamerbot?action=<id>&user=Bob&amount=500   anything else is a value for the action (a.args)
          Only from this computer, and only with the header X-EasyTuber-Control: streamerbot. A web page
          can't add that header without a CORS preflight, which is refused, so websites can't trigger it. */
       if (urlPath === '/api/streamerbot' && req.method === 'GET') {
@@ -253,9 +276,11 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         if (!sequences.length && (startDelay !== undefined || delay !== undefined)) return sendJson(res, 400, { error: 'Timing options need a sequence' });
         if (Number.isNaN(startDelay)) return sendJson(res, 400, { error: 'startDelay must be 0 to 60 seconds, in tenths' });
         if (Number.isNaN(delay)) return sendJson(res, 400, { error: 'delay must be 0.1 to 60 seconds, in tenths' });
-        if (!sequences.length) { playStep(steps[0]); return sendJson(res, 202, { accepted: true }); }
+        const args = actionArgs(params);
+        if (typeof args === 'string') return sendJson(res, 400, { error: args });
+        if (!sequences.length) { playStep(steps[0], args); return sendJson(res, 202, { accepted: true }); }
         if (sequenceTimer) return sendJson(res, 409, { error: 'A sequence is already playing' });
-        runSequence(steps, { startDelay, delay });
+        runSequence(steps, { startDelay, delay, args });
         return sendJson(res, 202, { accepted: true });
       }
 
@@ -327,4 +352,4 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   });
 }
 
-module.exports = { start, validBinding };
+module.exports = { start, validBinding, actionArgs };
