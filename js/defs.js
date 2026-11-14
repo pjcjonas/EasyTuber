@@ -26,8 +26,11 @@
       stateLabels: { open: 'Open', half: 'Half', closed: 'Closed' },
       hint: 'Both eyes in one image. "Half" is optional and makes blinks smoother.' },
     { id: 'mouth',     label: 'Mouth',           group: 'Head',      parent: 'face',      pivot: 'center', states: ['closed', 'half', 'open'],
-      stateLabels: { closed: 'Closed', half: 'Half', open: 'Open' },
-      hint: 'Closed = quiet, Half = soft sounds, Open = talking loudly. Half is optional.' },
+      // extra: optional images that are not part of the closed-half-open set. For the mouth, the
+      // vowel shapes: shown instead of Half / Open while that sound is heard (see audio.js).
+      extra: ['a', 'o', 'e'],
+      stateLabels: { closed: 'Closed', half: 'Half', open: 'Open', a: 'Ah', o: 'Oh / Oo', e: 'Ee / Eh' },
+      hint: 'Closed = quiet, Half = soft sounds, Open = talking loudly. Half is optional. Ah, Oh and Ee are optional mouth shapes for those sounds.' },
     { id: 'hairFront', label: 'Hair (front)',    group: 'Head',      parent: 'face',      pivot: 'top',    states: ['main'],
       hint: 'Bangs / fringe drawn over the face. Swings a little when the head moves.' },
     { id: 'hairBack',  label: 'Hair (back)',     group: 'Head',      parent: 'face',      pivot: 'top',    states: ['main'],
@@ -345,6 +348,10 @@
       return { part: 'eyes', state: 'open' };
     }
     if (re(/mouth|lip|talk/)) {
+      // vowel shapes: mouth_a.png, mouth-oh.png, mouth ee.png
+      if (has('a', 'ah', 'aa')) return { part: 'mouth', state: 'a' };
+      if (has('o', 'oh', 'oo', 'u')) return { part: 'mouth', state: 'o' };
+      if (has('e', 'ee', 'eh', 'i')) return { part: 'mouth', state: 'e' };
       if (re(/half|mid|small/)) return { part: 'mouth', state: 'half' };
       if (re(/clos|shut|idle|quiet/)) return { part: 'mouth', state: 'closed' };
       if (re(/open|talk|wide|big/)) return { part: 'mouth', state: 'open' };

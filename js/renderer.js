@@ -178,7 +178,9 @@
         if (!p.visible) continue;
         const def = PT.PART[id];
         const want = def.states.length > 1 ? (states[id] || def.states[0]) : 'main';
-        const r = PT.Assets.resolve(id, want, usePH, states.expression);
+        // while talking, the mouth picture for the vowel being said, when there is one
+        const vowel = id === 'mouth' && states.vowel && want !== 'closed' ? PT.Assets.exact(id, states.vowel, states.expression) : null;
+        const r = vowel || PT.Assets.resolve(id, want, usePH, states.expression);
         if (!r) continue;
         const fx = opts.fx ? opts.fx(id, now) : null;   // avatar-switch animation and actions
         if (fx && fx.hide) continue;

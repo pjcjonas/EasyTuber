@@ -133,6 +133,12 @@
      */
     resolve(partId, want, usePlaceholder = true, expression = '') {
       const user = this.hasUser(partId);
+      // an optional image asked for by name (a vowel mouth): that image, else the open one
+      if ((PT.PART[partId].extra || []).includes(want)) {
+        const r = this.exact(partId, want, expression);
+        if (r) return r;
+        want = 'open';
+      }
       if (expression && user) {
         const own = this.resolveIn(partId, want, this.user[partId], '@' + expression);
         if (own) return own;
@@ -140,6 +146,19 @@
       const set = user ? this.user[partId] : (usePlaceholder ? this.placeholders[partId] : null);
       if (!set) return null;
       return this.resolveIn(partId, want, set, '');
+    },
+
+    // One image by its own name, the expression's if it has one: { entry, squash, state } or null
+    exact(partId, key, expression = '') {
+      const set = this.hasUser(partId) ? this.user[partId] : null;
+      if (!set) return null;
+      for (const k of expression ? [key + '@' + expression, key] : [key]) if (set[k]) return { entry: set[k], squash: 1, state: k };
+      return null;
+    },
+    // does this part have any of its optional images (in any expression)?
+    hasExtra(partId) {
+      const extra = PT.PART[partId].extra, set = this.user[partId];
+      return !!(extra && set) && Object.keys(set).some((k) => extra.includes(k.split('@')[0]));
     },
 
     // suffix: '' for the normal images, '@<expression>' for an expression's
