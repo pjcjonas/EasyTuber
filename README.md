@@ -159,8 +159,8 @@ Layer effects, blend modes, masks and adjustment layers are not applied; flatten
 
 The part list has a **Head gear** section of its own, always there below the arms. It holds hats, caps, crowns, headphones, bows: anything worn on the head, as many as you like.
 
-* **＋ Add head gear** opens a tray with every picture in your parts library and accessories. Click one to add it as head gear on the skin on screen. Each one becomes a part of its own, attached to the face.
-* **Upload…** in the tray (or dropping pictures on it) adds new pictures: they are kept with your accessories and added as head gear straight away.
+* **Upload…** (next to **＋ Add head gear**) lets you pick one or more pictures at once; each becomes head gear on the skin on screen and is kept with your accessories. Dropping pictures on the **Head gear** heading or on the buttons does the same.
+* **＋ Add head gear** opens a tray with every picture in your parts library and accessories. Click one to add it as head gear. Each one becomes a part of its own, attached to the face. **✕** on a picture deletes it from your library (anything wearing it keeps it).
 * The **bin** on a head gear row removes it from every skin and avatar (its picture stays in your library).
 * Like any part of your own, head gear exists on every skin and avatar; each one can wear a different picture in it or leave it empty. In the **Part** tab, **Listed under** moves a part between **Head gear** and **Your parts**.
 
@@ -175,7 +175,7 @@ The skeleton has 11 parts. You can add your own: a hat, glasses, ears, a tail, a
 3. Give it an image, like any part. A dropped file goes to it when the file name contains the part's name: a part called *Party hat* takes `party-hat.png`.
 4. **Sway** sets how much it swings behind the part it is attached to when that part turns. Use 0 for something stiff, such as glasses.
 
-A part you add exists in every avatar, and each avatar has its own image and placement for it. An avatar with no image for it shows nothing there. A new part is drawn in front; move it with **Layer** in the Part tab. **Delete part** removes the part and its images from every avatar. You can add up to 24.
+A part you add exists in every avatar, and each avatar has its own image and placement for it. An avatar with no image for it shows nothing there. A new part is drawn in front; move it with **Layer** in the Part tab. **Delete part** removes the part and its images from every avatar. You can add up to 24. The **bin** on its row in the part list (or **Delete part** in the Part tab) deletes it.
 
 ---
 

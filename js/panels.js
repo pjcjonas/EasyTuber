@@ -97,7 +97,12 @@
         { title: 'Your parts', own: true, parts: PT.PARTS.filter((d) => d.custom && !d.section) },
       ];
       for (const sec of sections) {
-        host.append(el('div', { class: 'group-title' + (sec.section ? ' section-title' : '') }, sec.title));
+        const head = el('div', { class: 'group-title' + (sec.section ? ' section-title' : '') }, sec.title);
+        if (sec.section) {
+          head.title = `Drop pictures here to add them as ${sec.section.item}`;
+          this.makeDroppable(head, (files) => this.uploadToSection(sec.section, files));
+        }
+        host.append(head);
         if (sec.section && !sec.parts.length) host.append(el('p', { class: 'note part-empty' }, `No ${sec.section.item} yet.`));
         for (const def of sec.parts) this.partRow(host, def, sec.section);
         if (sec.section) host.append(this.sectionAdd(sec.section));
@@ -132,9 +137,10 @@
         this.thumbFor(def.id),
         el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, def.label), el('div', { class: 'part-sub' + (count ? ' ok' : '') }, sub)),
         eye);
-      if (section) row.append(el('button', {
-        class: 'icon-btn', title: `Remove this ${section.item} (from every skin and avatar)`,
-        onclick: (e) => { e.stopPropagation(); if (confirm(`Remove "${def.label}" from every skin and avatar?`)) app.removePart(def.id); },
+      if (def.custom) row.append(el('button', {
+        class: 'icon-btn del', title: section ? `Remove this ${section.item} (from every skin and avatar)` : 'Delete this part (from every skin and avatar)',
+        'aria-label': 'Delete ' + def.label,
+        onclick: (e) => { e.stopPropagation(); if (confirm(`Delete "${def.label}" from every skin and avatar?`)) app.removePart(def.id); },
       }, '🗑'));
       this.makeDroppable(row, (files) => PT.Editor.importFiles(files, { part: def.id }));
       host.append(row);
@@ -142,27 +148,42 @@
 
     /* A section's "+ Add" button, and the tray it opens: every picture in your library and
        accessories, each adding a new item of the section wearing it; or upload new ones. */
+    // pictures straight into a section: each one is kept with the accessories and added as an item
+    async uploadToSection(sec, files) {
+      const added = await PT.Accessories.upload(files);
+      let n = 0;
+      for (const x of added) if (await this.app.addSectionItem(sec.id, x)) n++;
+      if (n) PT.toast(`Added ${n} ${sec.item} item${n === 1 ? '' : 's'}. Move ${n === 1 ? 'it' : 'them'} into place in Edit mode.`, '', 5000);
+      return n;
+    },
+
     sectionAdd(sec) {
       const app = this.app, L = PT.Library, X = PT.Accessories, open = this.sectionOpen === sec.id;
+      const full = this.project.customParts.length >= PT.MAX_CUSTOM_PARTS;
+      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; if (f.length) await this.uploadToSection(sec, f); });
       const wrap = el('div', { class: 'section-add' },
-        el('button', {
-          class: 'btn' + (open ? ' on' : ''), disabled: this.project.customParts.length >= PT.MAX_CUSTOM_PARTS,
-          title: `Add ${sec.item} from your library, or upload new`,
-          onclick: () => { this.sectionOpen = open ? null : sec.id; this.renderPartList(); },
-        }, open ? 'Done' : `＋ Add ${sec.item}`));
+        el('div', { class: 'row' },
+          el('button', {
+            class: 'btn' + (open ? ' on' : ''), disabled: full, title: `Add ${sec.item} from your library and accessories`,
+            onclick: () => { this.sectionOpen = open ? null : sec.id; this.renderPartList(); },
+          }, open ? 'Done' : `＋ Add ${sec.item}`),
+          el('button', { class: 'btn', disabled: full, title: `Choose one or more pictures; each becomes ${sec.item}`, onclick: () => fileIn.click() }, 'Upload…')),
+        fileIn);
+      this.makeDroppable(wrap, (files) => this.uploadToSection(sec, files));
       if (!open) return wrap;
       const items = [...X.list(), ...L.parts()].filter((x) => (x.kind === 'accessory' ? X.picture(x) : L.cover(x.images, x.part)));
       const add = async (x) => { const id = await app.addSectionItem(sec.id, x); if (id) PT.toast(`Added "${PT.PART[id].label}" to ${sec.label}. Move it into place in Edit mode.`, '', 5000); };
-      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
-      const upload = async (files) => { for (const x of await X.upload(files)) await add(x); };
-      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; await upload(f); });
+      const del = (x) => el('span', {
+        class: 'lib-del', role: 'button', title: `Delete "${x.name}" from your ${x.kind === 'accessory' ? 'accessories' : 'library'} (anything wearing it keeps it)`,
+        onclick: (e) => { e.stopPropagation(); if (confirm(`Delete "${x.name}" from your ${x.kind === 'accessory' ? 'accessories' : 'library'}?`)) { L.remove(x); this.renderPartList(); this.renderAccessories(); this.renderAvatars(); } },
+      }, '✕');
       const tray = el('div', { class: 'lib-grid section-tray' },
-        el('button', { class: 'lib-tile upload', title: `Upload new ${sec.item}: it is kept with your accessories`, onclick: () => fileIn.click() },
-          el('span', { class: 'lib-pic' }, '＋'), el('span', { class: 'lib-cap' }, 'Upload…')),
         ...items.map((x) => this.tile(x.kind === 'accessory' ? X.picture(x) : L.cover(x.images, x.part), x.name, `Add "${x.name}" as ${sec.item}`, () => add(x),
-          el('span', { class: 'lib-other' }, x.kind === 'accessory' ? 'Accessory' : 'Library'))));
-      this.makeDroppable(tray, upload);
-      wrap.append(el('p', { class: 'note' }, `Click a picture to add it as ${sec.item} on the skin on screen. Add as many as you like; each one is a part of its own.`), tray, fileIn);
+          [el('span', { class: 'lib-other' }, x.kind === 'accessory' ? 'Accessory' : 'Library'), del(x)])));
+      wrap.append(items.length
+        ? el('p', { class: 'note' }, `Click a picture to add it as ${sec.item} on the skin on screen; ✕ deletes it from your library. Add as many as you like.`)
+        : el('p', { class: 'note' }, 'Nothing in your library or accessories yet: use Upload…'), tray);
       return wrap;
     },
 
