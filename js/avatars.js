@@ -241,6 +241,8 @@
     // avatars from a saved .easytuber.json file are added to this project
     async importFile(file) {
       const data = PT.normalizeProject(JSON.parse(await file.text()));
+      const missing = await PT.Storage.missingPictures(data);
+      if (missing) throw new Error(`${missing} of its pictures are not in the file. Use "Save file" on the computer it came from and add that file instead.`);
       let n = 0;
       for (const a of data.avatars) {
         this.add(a.name, a.id === data.activeAvatar ? takeLook(data) : (a.look || blankLook()));

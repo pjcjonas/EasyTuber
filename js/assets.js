@@ -34,6 +34,10 @@
   PT.Assets = {
     user: {},          // partId -> state -> entry
     placeholders: {},  // partId -> state -> entry
+    // "img:<hash>" -> the data URL it was stored from: the same picture under both names, so a
+    // picture that has just been stored (or an undo back to before it was) isn't loaded again
+    aliases: new Map(),
+    samePicture(a, b) { return a === b || this.aliases.get(a) === b || this.aliases.get(b) === a; },
 
     initPlaceholders() {
       const ph = PT.makePlaceholders();
@@ -90,12 +94,17 @@
         for (const [st, url] of Object.entries(part.images || {})) {
           if (!url) continue;
           const old = this.user[id] && this.user[id][st];
-          if (old && old.url === url) { (next[id] = next[id] || {})[st] = old; continue; }
+          if (old && this.samePicture(old.url, url)) { old.url = url; (next[id] = next[id] || {})[st] = old; continue; }
           jobs.push(PT.loadImage(url).then((img) => {
             const e = makeEntry(img, img.naturalWidth, img.naturalHeight);
             e.url = url;
             (next[id] = next[id] || {})[st] = e;
-          }).catch(() => { delete part.images[st]; }));
+          }).catch(() => {
+            // A picture kept as a file may only be out of reach for now: leave its place in the
+            // project alone, or the next save would forget it. A broken data URL is no use to keep.
+            if (PT.isImageRef(url)) console.warn(`Picture for ${id} / ${st} could not be loaded (${url})`);
+            else delete part.images[st];
+          }));
         }
       }
       await Promise.all(jobs);
