@@ -82,3 +82,25 @@ test('accessories are library entries of their own kind, for no part in particul
   assert.equal(PT.Library.parts().map((x) => x.name).join(), 'Eyes');                          // not in the parts library list
   assert.equal(PT.Library.for('eyes', true).map((x) => x.name).join(), 'Eyes');               // nor in Swap part's library tiles
 });
+
+test('uploaded pictures: one option each, except frames of one item', () => {
+  const PT = loadPT();
+  const g = (names, part) => plain(PT.Library.groupUploads(names, part)).map((x) => `${x.part}:${x.name}=${x.files.map((f) => names[f.index].replace('.png', '') + '>' + f.state).join('+')}`);
+  // several pictures for a one-picture part: each its own option (this used to keep only the last)
+  assert.deepEqual(g(['red cap.png', 'blue cap.png', 'crown.png'], 'face'), ['face:red cap=red cap>main', 'face:blue cap=blue cap>main', 'face:crown=crown>main']);
+  // eyes: frames of one item go together, different items stay apart
+  assert.deepEqual(g(['cute_eyes_open.png', 'cute_eyes_closed.png', 'angry_eyes_open.png', 'angry_eyes_closed.png', 'angry_eyes_half.png'], 'eyes'), [
+    'eyes:cute eyes=cute_eyes_open>open+cute_eyes_closed>closed',
+    'eyes:angry eyes=angry_eyes_open>open+angry_eyes_closed>closed+angry_eyes_half>half',
+  ]);
+  // names that say nothing about frames: one option each, as the open eyes
+  assert.deepEqual(g(['red.png', 'green.png'], 'eyes'), ['eyes:red=red>open', 'eyes:green=green>open']);
+  // vowel mouth shapes join their mouth
+  assert.deepEqual(g(['smile_mouth_closed.png', 'smile_mouth_open.png', 'smile_mouth_ah.png'], 'mouth'), ['mouth:smile mouth=smile_mouth_closed>closed+smile_mouth_open>open+smile_mouth_ah>a']);
+  // no part given: sorted by name, the same rules
+  assert.deepEqual(g(['eyes_open.png', 'eyes_closed.png', 'torso.png', 'body.png', 'sticker.png']), [
+    'eyes:eyes=eyes_open>open+eyes_closed>closed', 'torso:torso=torso>main', 'torso:body=body>main', ':sticker=sticker>main',
+  ]);
+  // two files claiming the same frame of one item: the second takes a free frame instead of overwriting
+  assert.deepEqual(g(['eyes_open.png', 'eyes_open copy.png'], 'eyes').length, 2);
+});

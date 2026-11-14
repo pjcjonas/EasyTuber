@@ -339,13 +339,13 @@
         ...accessories.map((x) => this.tile(PT.Accessories.picture(x), x.name, 'An accessory: put it on this part',
           async () => { if (await PT.Accessories.wear(x, this.project.activeAvatar, id)) PT.toast(`${def.label}: now "${x.name}".`); }, el('span', { class: 'lib-other' }, 'Accessory'))));
       const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
-      fileIn.addEventListener('change', async () => {
-        const n = await L.upload(fileIn.files, id); fileIn.value = '';
-        if (n.length) { PT.toast(`Added ${n.length} to the library. Click it to use it.`); this.renderInspector(); this.renderAvatars(); }
-      });
+      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; if (f.length) await dropped(f); });
       const undo = L.undo && L.undo.id === id && L.undo.avatar === this.project.activeAvatar;
-      this.makeDroppable(grid, async (files) => { const n = await L.upload(files, id); if (n.length) { this.renderInspector(); this.renderAvatars(); } });
-      return this.section('Swap part',
+      const dropped = async (files) => {
+        const n = await L.upload(files, id);
+        if (n.length) { PT.toast(`Added ${n.length} ${def.label.toLowerCase()} option${n.length === 1 ? '' : 's'} to Swap part. Click one to use it.`); this.renderInspector(); this.renderAvatars(); }
+      };
+      const box = this.section('Swap part',
         avatars.length || items.length || accessories.length ? grid : this.note(`Nothing to swap in yet. Your other avatars' ${def.label.toLowerCase()} show up here, and so do parts you keep in the library.`),
         el('label', { class: 'check', style: { marginTop: '6px' } },
           el('input', { type: 'checkbox', checked: all, onchange: (e) => { this.libAll = e.target.checked; this.renderInspector(); } }),
@@ -355,9 +355,12 @@
             const x = L.save(id);
             if (x) { PT.toast(`Saved to the library as "${x.name}".`); this.renderInspector(); this.renderAvatars(); }
           } }, 'Save to library'),
-          el('button', { class: 'btn small', title: 'Add pictures for this part to the library, without changing the avatar', onclick: () => fileIn.click() }, 'Upload to library…'),
+          el('button', { class: 'btn small', title: 'Choose one or more pictures; each becomes an option here, without changing the avatar', onclick: () => fileIn.click() }, 'Upload options…'),
           undo ? el('button', { class: 'btn small', onclick: async () => { if (await L.undoSwap()) PT.toast('Put the old one back.'); } }, '↩ Undo swap') : null),
+        this.note('Upload several pictures at once, or drop them on this box: each one becomes an option. Frames of one item (eyes_open and eyes_closed) stay together.'),
         fileIn);
+      this.makeDroppable(box, dropped);
+      return box;
     },
 
     // The parts library in the Avatars tab: every part, grouped by what it is for, to rename,
