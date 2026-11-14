@@ -152,6 +152,12 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   const server = http.createServer(async (req, res) => {
     const urlPath = req.url.split('?')[0];
     try {
+      /* The API is for this computer only. A page on another site could point its own name at
+         127.0.0.1 to get round the browser's same-site rule; its requests carry that name as Host. */
+      if (urlPath.startsWith('/api/')) {
+        const port = req.socket.localPort, host = req.headers.host;
+        if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return sendJson(res, 403, { error: 'Use a local URL' });
+      }
       if (urlPath === '/api/ping' && req.method === 'GET') return sendJson(res, 200, { ok: true, version });
 
       if (urlPath === '/api/project') {
@@ -194,8 +200,8 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
          Only from this computer, and only with the header X-EasyTuber-Control: streamerbot. A web page
          can't add that header without a CORS preflight, which is refused, so websites can't trigger it. */
       if (urlPath === '/api/streamerbot' && req.method === 'GET') {
-        const port = req.socket.localPort, host = req.headers.host;
-        if ((host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) || req.headers['x-easytuber-control'] !== 'streamerbot') {
+        const port = req.socket.localPort;
+        if (req.headers['x-easytuber-control'] !== 'streamerbot') {
           return sendJson(res, 403, { error: 'Use a local URL and send the header X-EasyTuber-Control: streamerbot' });
         }
         const params = new URL(req.url, `http://127.0.0.1:${port}`).searchParams;
@@ -216,9 +222,14 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         return sendJson(res, 202, { accepted: true });
       }
 
+      /* the editor's mic level, blinks and avatar-switch cues, passed on to the stage pages.
+         JSON only: a request from another website can't send this without a CORS preflight, which is
+         refused. Actions never come this way: they start at /api/streamerbot or a hotkey, which check them. */
       if (urlPath === '/api/live' && req.method === 'POST') {
+        if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
         let data = {};
         try { data = JSON.parse((await readBody(req)) || '{}'); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+        if (!data || typeof data !== 'object' || Array.isArray(data) || data.type === 'action') return sendJson(res, 400, { error: 'bad message' });
         broadcast('live', data);
         res.writeHead(204); return res.end();
       }
