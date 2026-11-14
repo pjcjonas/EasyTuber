@@ -19,6 +19,7 @@
       this.renderStageTab();
       this.renderAvatars();
       this.renderActions();
+      this.renderAccessories();
     },
 
     showTab(name) {
@@ -164,6 +165,73 @@
       return wrap;
     },
 
+    /* ---------- Accessories tab ---------- */
+    renderAccessories() {
+      const host = document.getElementById('tab-accessories');
+      if (!host || this.app.stageMode || !PT.Accessories) return;
+      const X = PT.Accessories, A = PT.Avatars, p = this.project, app = this.app;
+      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      const add = async (files) => {
+        const n = await X.upload(files);
+        if (n.length) { PT.toast(`Added ${n.length} accessor${n.length === 1 ? 'y' : 'ies'}. Choose where each one goes.`); this.renderAccessories(); this.renderInspector(); }
+      };
+      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; await add(f); });
+      const drop = el('div', { class: 'dropzone', tabindex: '0', onclick: () => fileIn.click(), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') fileIn.click(); } },
+        el('strong', {}, 'Upload accessories…'), el('span', {}, 'or drop pictures here: hats, glasses, bows, collars, props'));
+      this.makeDroppable(drop, add);
+
+      const avatarName = (a) => a.name + (a.kind === 'avatar' ? ' (avatar)' : '');
+      const cards = X.list().map((x) => {
+        const name = el('input', { type: 'text', class: 'av-name', value: x.name, maxlength: 60, 'aria-label': 'Accessory name' });
+        name.addEventListener('change', () => { PT.Library.rename(x, name.value); this.renderAccessories(); });
+        const who = el('select', { 'aria-label': 'On which skin or avatar' },
+          el('optgroup', { label: 'My skins' }, ...A.skins().map((a) => el('option', { value: a.id }, avatarName(a)))),
+          A.others().length ? el('optgroup', { label: 'Avatars' }, ...A.others().map((a) => el('option', { value: a.id }, avatarName(a)))) : null);
+        who.value = this.accWho && p.avatars.some((a) => a.id === this.accWho) ? this.accWho : (p.avatars.some((a) => a.id === p.activeAvatar) ? p.activeAvatar : p.avatars[0].id);
+        who.addEventListener('change', () => { this.accWho = who.value; });
+        const where = el('select', { 'aria-label': 'On which part' },
+          ...X.customParts().map((d) => el('option', { value: d.id }, d.label)),
+          el('option', { value: 'new' }, '＋ A new part for it'));
+        // the part named after it if there is one, else a new one: never someone else's part by surprise
+        const own = X.customParts().find((d) => d.label.trim().toLowerCase() === x.name.trim().toLowerCase());
+        where.value = own ? own.id : 'new';
+        const worn = X.wearers(x);
+        return el('div', { class: 'acc-card', 'data-accessory': x.id },
+          el('div', { class: 'acc-top' },
+            el('span', { class: 'lib-pic small' }, el('img', { src: PT.imageSrc(X.picture(x)), alt: '' })),
+            name,
+            el('button', { class: 'icon-btn', title: 'Delete this accessory (avatars wearing it keep it)', onclick: () => {
+              if (confirm(`Delete "${x.name}"?`)) { PT.Library.remove(x); this.renderAccessories(); this.renderInspector(); }
+            } }, '🗑')),
+          el('div', { class: 'acc-put' },
+            el('label', { class: 'note' }, 'Put it on'), who,
+            el('label', { class: 'note' }, 'as'), where,
+            el('button', { class: 'btn small primary', onclick: async () => {
+              const partId = await X.wear(x, who.value, where.value);
+              if (!partId) return;
+              const a = p.avatars.find((v) => v.id === who.value);
+              PT.toast(`"${x.name}" is on ${a ? a.name : 'the avatar'} as ${PT.PART[partId].label}.` + (who.value === p.activeAvatar ? '' : ' Show or Edit it to see it.'), '', 6000);
+              this.renderAccessories();
+            } }, 'Put it on')),
+          worn.length
+            ? el('div', { class: 'acc-worn' }, el('span', { class: 'note' }, 'Worn by: '),
+              ...worn.map((w) => el('span', { class: 'chip acc-chip' }, `${w.avatar.name} · ${PT.PART[w.part].label}`,
+                el('button', { class: 'acc-off', title: 'Take it off', onclick: async () => { await X.takeOff(w.avatar.id, w.part); this.renderAccessories(); } }, '✕'))))
+            : el('p', { class: 'note' }, 'Not worn yet.'));
+      });
+
+      host.innerHTML = '';
+      host.append(
+        this.section('Accessories',
+          this.note('Upload an accessory once, then put it on a part of your own on any skin or avatar. "A new part for it" makes a part named after the accessory, attached to the face; every skin and avatar gets that part, empty until you put something on it.'),
+          drop, fileIn),
+        cards.length
+          ? this.section('Your accessories', ...cards,
+            this.note('On the skin on screen it lines up with layers drawn on the same canvas; otherwise it is placed at the part\'s joint. Move, scale or turn it in Edit mode like any part.'))
+          : this.section('Your accessories', this.note('None yet.')),
+      );
+    },
+
     // One row per part group: which avatar it comes from. Changing one shows the result on the stage.
     mixBuilder() {
       const A = PT.Avatars, p = this.project, skins = A.skins();
@@ -199,12 +267,15 @@
       if (!L) return '';
       const all = !!this.libAll;
       const avatars = L.fromAvatars(id), items = L.for(id, all);
+      const accessories = def.custom && PT.Accessories ? PT.Accessories.list() : [];
       const apply = async (src, what) => { if (await L.apply(id, src)) PT.toast(`${def.label}: now ${what}. Undo swap puts the old one back.`, '', 5000); };
       const grid = el('div', { class: 'lib-grid' },
         ...avatars.map(({ avatar, part }) => this.tile(L.cover(part.images, id), avatar.name, `Use ${avatar.name}'s ${def.label.toLowerCase()}`,
           () => apply({ images: part.images, adj: part.adj, place: part, part: id }, `from ${avatar.name}`))),
         ...items.map((x) => this.tile(L.cover(x.images, x.part || id), x.name, x.part && x.part !== id ? `Made for ${PT.partName(PT.PART[x.part])}: it is fitted into place` : 'From your parts library',
-          () => apply(x, `"${x.name}"`), el('span', { class: 'lib-other' }, x.part && x.part !== id ? 'Library · ' + PT.PART[x.part].label : 'Library'))));
+          () => apply(x, `"${x.name}"`), el('span', { class: 'lib-other' }, x.part && x.part !== id ? 'Library · ' + PT.PART[x.part].label : 'Library'))),
+        ...accessories.map((x) => this.tile(PT.Accessories.picture(x), x.name, 'An accessory: put it on this part',
+          async () => { if (await PT.Accessories.wear(x, this.project.activeAvatar, id)) PT.toast(`${def.label}: now "${x.name}".`); }, el('span', { class: 'lib-other' }, 'Accessory'))));
       const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
       fileIn.addEventListener('change', async () => {
         const n = await L.upload(fileIn.files, id); fileIn.value = '';
@@ -213,7 +284,7 @@
       const undo = L.undo && L.undo.id === id && L.undo.avatar === this.project.activeAvatar;
       this.makeDroppable(grid, async (files) => { const n = await L.upload(files, id); if (n.length) { this.renderInspector(); this.renderAvatars(); } });
       return this.section('Swap part',
-        avatars.length || items.length ? grid : this.note(`Nothing to swap in yet. Your other avatars' ${def.label.toLowerCase()} show up here, and so do parts you keep in the library.`),
+        avatars.length || items.length || accessories.length ? grid : this.note(`Nothing to swap in yet. Your other avatars' ${def.label.toLowerCase()} show up here, and so do parts you keep in the library.`),
         el('label', { class: 'check', style: { marginTop: '6px' } },
           el('input', { type: 'checkbox', checked: all, onchange: (e) => { this.libAll = e.target.checked; this.renderInspector(); } }),
           ' Show library parts made for other parts too'),
@@ -232,7 +303,7 @@
     libraryList() {
       const L = PT.Library, p = this.project;
       if (!L) return this.note('');
-      const list = L.list();
+      const list = L.parts();
       const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
       const add = async (files) => {
         const n = await L.upload(files, null);
@@ -805,6 +876,7 @@
     renderAvatars() {
       const host = document.getElementById('tab-avatars');
       if (!host || this.app.stageMode) return;
+      this.renderAccessories();   // its lists of skins and avatars follow this one
       if (this.capture) this.capture.cancel();
       const A = PT.Avatars, p = this.project, app = this.app;
 

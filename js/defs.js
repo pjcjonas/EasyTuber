@@ -309,7 +309,7 @@
         const pl = x.place && typeof x.place === 'object' ? x.place : null;
         const place = pl && ['x', 'y', 'rot', 'scale', 'px', 'py'].every((k) => Number.isFinite(pl[k]))
           ? { x: pl.x, y: pl.y, rot: pl.rot, scale: pl.scale, px: pl.px, py: pl.py, flip: !!pl.flip } : null;
-        return { id: x.id, name: str(x.name, 60).trim() || 'Part', part: typeof x.part === 'string' && PT.PART[x.part] ? x.part : '', images,
+        return { id: x.id, kind: x.kind === 'accessory' ? 'accessory' : 'part', name: str(x.name, 60).trim() || 'Part', part: typeof x.part === 'string' && PT.PART[x.part] && x.kind !== 'accessory' ? x.part : '', images,
           adj: x.adj && typeof x.adj === 'object' ? x.adj : {}, place, at: num(x.at) || 0 };
       })
       .filter((x) => Object.keys(x.images).length)

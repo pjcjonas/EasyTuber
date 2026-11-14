@@ -90,7 +90,7 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 | **Left panel** | The drop box for all your layers, and the list of body parts. Click a part to select it; the eye icon hides or shows it |
 | **Centre** | The stage, behind the two panels. The checkerboard area is what OBS captures |
 | **Bottom bar** | **Start mic**, the level meter with its **talk** and **open** markers, the mouth/eyes status, and **Hold to test talk** |
-| **Right panel** | Six tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars** and **Actions**. Each tab is split into clearly marked sections |
+| **Right panel** | Seven tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars**, **Actions** and **Accessories**. Each tab is split into clearly marked sections |
 
 **The side panels float over the stage.** Click the small tab on a panel's inner edge (**‹** / **›**) to slide it away and give the stage the whole width; click it again to bring the panel back. Drag the right panel's inner edge to make it wider or narrower (double-click the edge for its usual width). The stage always frames the avatar in the space the panels leave free, and the app remembers how you left them.
 
@@ -288,6 +288,18 @@ Open the **Avatars** tab. It has two lists:
 * **Random mix** builds a new look from your skins: each part comes from a random skin (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as a skin. Mixing works best when your skins were drawn on the same canvas, in the same pose.
 * **Build a mix** lets you choose instead of leaving it to chance: one row per part, each with the skin it comes from. Change a row and the stage and OBS show the result straight away. Your skins are not changed. **Save as skin** keeps the mix as a new skin.
 * **Swap a part.** Select a part. In the **Part** tab, under **Swap part**, are pictures of that part from each of your other avatars and from your parts library. Click one and it replaces this avatar's part: from an avatar it keeps that avatar's placement; from the library it keeps the placement it was saved with, or is fitted into place. **↩ Undo swap** puts the old one back.
+
+### Accessories
+
+The **Accessories** tab holds pictures you put on: hats, glasses, bows, collars, props. Upload one once and put it on any skin or avatar.
+
+1. Click **Upload accessories…** (or drop pictures on it). Each picture becomes an accessory named after its file.
+2. On its card choose **Put it on** (a skin or an avatar, which doesn't have to be the one on screen) and **as** (one of your own parts, or **＋ A new part for it**, which makes a part named after the accessory, attached to the face). Click **Put it on**.
+3. **Worn by** lists who wears it; **✕** takes it off that one. The bin deletes the accessory; avatars that wear it keep it.
+
+On the skin on screen, an accessory drawn on the same canvas as your layers lines up with them; otherwise it is placed at the part's joint, sized to fit. Move, scale or turn it in Edit mode like any part. When a part of your own is selected, **Swap part** in the Part tab offers your accessories too.
+
+Parts of your own exist on every skin and avatar (see *Your own parts* in section 4), so the same hat part can hold a different hat on each one.
 
 ### Parts library
 
@@ -533,6 +545,7 @@ js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, the user's own parts (applyRig), default layout and settings, filename routing
 js/psd.js           PSD import: layers to parts (the file is read by js/vendor/ag-psd.js, MIT)
 js/library.js       the parts library, and swapping a part for another avatar's or a library part
+js/accessories.js   accessories: uploading them and putting them on a part of your own on any skin or avatar
 js/layout.js        the side panels: floating over the stage, sliding away, resizing the right one
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
