@@ -34,16 +34,20 @@ function fakeContext() {
   return { g, calls };
 }
 
-/* The avatar for the action to measure: a pose where every part is a 100 x 100 square at a spot. */
-function fakePose(PT, faceX) {
+/* The avatar for the action to measure: every part is a 100 x 100 image. The arms hang down from
+   the shoulders, the upper arm above the forearm. handOnly: only the upper arms have art. */
+function fakePose(PT, faceX, { handOnly = false } = {}) {
   PT.Assets = {
     primary: () => ({ w: 100, h: 100, bbox: { x: 10, y: 10, w: 80, h: 80 } }),
+    hasUser: (id) => !handOnly || /Upper$/.test(id),
   };
   const at = (x, y) => ({ world: [1, 0, 0, 1, x, y] });
   const pose = {};
   for (const d of PT.PARTS) pose[d.id] = at(faceX - 50, 300);
-  pose.armRLower = at(faceX + 150, 600);
-  pose.armLLower = at(faceX - 250, 600);
+  for (const [side, dx] of [['R', 150], ['L', -150]]) {
+    pose['arm' + side + 'Upper'] = at(faceX + dx - 50, 420);
+    pose['arm' + side + 'Lower'] = at(faceX + dx - 50, 520);
+  }
   PT.Actions.setPose(pose, { view: () => [1, 0, 0, 1, 0, 0] });
 }
 
@@ -79,11 +83,11 @@ test('a whole run: dribble, shoot, score, go wild', () => {
   const at = (t) => poses.find((p) => p.t === t);
   // the right arm (screen right) dribbles: out to the side
   assert.ok(at(1000).deltas.armRUpper.rot < -10, 'right arm out: ' + at(1000).deltas.armRUpper.rot);
-  // the shot: the right arm is overhead
-  assert.ok(at(3600).deltas.armRUpper.rot < -150, 'overhead: ' + at(3600).deltas.armRUpper.rot);
+  // the shot: the right arm is raised, stretched up towards the hoop
+  assert.ok(at(3600).deltas.armRUpper.rot < -100, 'raised: ' + at(3600).deltas.armRUpper.rot);
   // the party: both arms up, a jump, the mouth open, the "happy" expression if there is one
   const party = poses.filter((p) => p.t >= 5000 && p.t < 7500);
-  assert.ok(party.every((p) => p.deltas.armRUpper.rot < -100 && p.deltas.armLUpper.rot > 100));
+  assert.ok(party.every((p) => p.deltas.armRUpper.rot < -90 && p.deltas.armLUpper.rot > 90), 'fists up');
   assert.ok(Math.min(...party.map((p) => p.deltas.torso.oy)) < -5, 'jumps');
   assert.ok(party.every((p) => p.states.mouth === 'open' && p.states.expression === 'happy'));
   // talking is left alone while dribbling
@@ -100,7 +104,7 @@ test('an avatar on the right shoots with the left arm, at a hoop on the left', (
   fakePose(PT, 1500);
   const { poses } = run(PT, project);
   const shot = poses.find((p) => p.t === 3600);
-  assert.ok(shot.deltas.armLUpper.rot > 150, 'left arm overhead: ' + shot.deltas.armLUpper.rot);
+  assert.ok(shot.deltas.armLUpper.rot > 100, 'left arm raised: ' + shot.deltas.armLUpper.rot);
   assert.ok(shot.deltas.face.rot < 0, 'looks left');
 });
 
@@ -110,4 +114,45 @@ test('with confetti off, none is drawn', () => {
   fakePose(PT, 500);
   const { calls } = run(PT, project);
   assert.ok((calls.fillRect || 0) < 200, 'fillRect ' + calls.fillRect);
+});
+
+test('the arms come in front of the head from the catch, and go back after', () => {
+  const PT = loadPT();
+  const project = PT.normalizeProject({});
+  fakePose(PT, 500);
+  const R = { ctx: fakeContext().g, view: () => [1, 0, 0, 1, 0, 0] };
+  PT.Actions.play('basketball', {}, project, 0);
+  const top = (t) => { PT.Actions.update(t, project); PT.Actions.draw('front', R); return PT.Actions.drawOrder(project.order).slice(-4).join(); };
+  assert.equal(top(1000), project.order.slice(-4).join());            // dribbling: the stacking is the avatar's own
+  assert.equal(top(3000), 'armLUpper,armLLower,armRUpper,armRLower'); // the throwing arm on top of everything
+  assert.equal(top(6000), 'armLUpper,armLLower,armRUpper,armRLower');
+  PT.Actions.update(8300, project);
+  assert.equal(PT.Actions.drawOrder(project.order), project.order);   // over: untouched
+});
+
+test('the two hands hold the ball in front of the face before the shot', () => {
+  const PT = loadPT();
+  const project = PT.normalizeProject({});
+  fakePose(PT, 500);
+  const R = { ctx: fakeContext().g, view: () => [1, 0, 0, 1, 0, 0] };
+  PT.Actions.play('basketball', {}, project, 0);
+  for (let t = 0; t <= 3300; t += 50) { PT.Actions.update(t, project); PT.Actions.draw('front', R); }
+  const run = PT.Actions.running[0], s = run.state;
+  assert.ok(s.held, 'held in both hands');
+  // in front of the head: between the shoulders, above them
+  assert.ok(s.held[0] > s.arms.L.S[0] && s.held[0] < s.arms.R.S[0] + s.r * 2, 'between the shoulders: ' + s.held[0]);
+  assert.ok(s.held[1] < s.arms.R.S[1], 'above the shoulders: ' + s.held[1]);
+});
+
+test('hand-only arms are moved, not swung', () => {
+  const PT = loadPT();
+  const project = PT.normalizeProject({});
+  fakePose(PT, 500, { handOnly: true });
+  const { poses } = run(PT, project);
+  const at = (t) => poses.find((p) => p.t === t);
+  assert.equal(at(3600).deltas.armRLower, undefined);                // no forearm to bend
+  assert.ok(at(3600).deltas.armRUpper.oy < -20, 'the hand goes up: ' + at(3600).deltas.armRUpper.oy);
+  assert.ok(Math.abs(at(3600).deltas.armRUpper.rot) < 45, 'and stays the right way up');
+  const party = poses.filter((p) => p.t >= 5000 && p.t < 7500);
+  assert.ok(party.every((p) => p.deltas.armRUpper.oy < 0 && p.deltas.armLUpper.oy < 0), 'both hands up');
 });

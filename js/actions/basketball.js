@@ -2,8 +2,10 @@
 
    Everything is drawn here (no picture or sound files). The hoop goes on the side of the stage with
    more room, and the arm on that side dribbles and shoots. The ball is sized to the avatar's face.
-   Arms with a forearm swing at the shoulder and elbow; an arm that is only a hand (no forearm
-   image) is moved about instead, so the hand stays the right way up. */
+   Arms with a forearm are bent at the shoulder and elbow so the hands reach where they should
+   (both on the ball in front of the face, fists in the air), and from the catch on they are drawn
+   in front of the head. An arm that is only a hand (no forearm image) is moved about instead, so
+   the hand stays the right way up. */
 (function () {
   // timeline, ms
   const BOUNCE = 520, BOUNCES = 5;
@@ -46,8 +48,48 @@
       y: clamp(top - faceH * 0.15, s.r * 4.2, PT.STAGE_H * 0.45),
     };
     s.floor = PT.STAGE_H - s.r;
+    s.face = face; s.faceW = faceW; s.faceH = faceH; s.top = top;
+    // real arms: where the shoulder is, how long the upper arm and forearm are, which way they point
+    s.arms = {};
+    for (const sd of ['L', 'R']) {
+      if (s.handOnly[sd]) continue;
+      const up = 'arm' + sd + 'Upper', low = 'arm' + sd + 'Lower';
+      const S = jointAt(a, up), E = jointAt(a, low), W = a.atArt(low, 0.5, 1);
+      const L1 = Math.hypot(E[0] - S[0], E[1] - S[1]), L2 = Math.hypot(W[0] - E[0], W[1] - E[1]);
+      if (L1 > 2 && L2 > 2) s.arms[sd] = { S, L1, L2, A1: Math.atan2(E[1] - S[1], E[0] - S[0]), A2: Math.atan2(W[1] - E[1], W[0] - E[0]), screen: sd === 'R' ? 1 : -1 };
+    }
     s.ready = true;
     return s;
+  }
+
+  // a part's joint (its pivot) on the stage
+  function jointAt(a, id) {
+    const e = PT.Assets.primary(id, !!(a.project && a.project.stage.placeholders)), p = a.project && a.project.parts[id];
+    if (!e || !p || !e.w || !e.h) return a.at(id, 0.5, 0.5);
+    return a.at(id, p.px / e.w, p.py / e.h);
+  }
+
+  /* Bend a real arm so its hand reaches a point (stage units), elbow out to the side: returns
+     [upper arm, forearm] rotations to add to the pose. If the point is out of reach the arm points
+     at it. fallback: what to return for an arm that couldn't be measured. */
+  function reachFor(s, sd, target, fallback) {
+    const A = s.arms[sd];
+    if (!A) return fallback;
+    const dx = target[0] - A.S[0], dy = target[1] - A.S[1], d = Math.hypot(dx, dy) || 1;
+    const dd = clamp(d, Math.abs(A.L1 - A.L2) + 1, A.L1 + A.L2 - 0.5);
+    const base = Math.atan2(dy, dx), bend = Math.acos(clamp((A.L1 * A.L1 + dd * dd - A.L2 * A.L2) / (2 * A.L1 * dd), -1, 1));
+    let best = null;
+    for (const a1 of [base + bend, base - bend]) {
+      const ex = A.S[0] + A.L1 * Math.cos(a1), ey = A.S[1] + A.L1 * Math.sin(a1), score = (ex - A.S[0]) * A.screen;
+      if (!best || score > best.score) best = { a1, ex, ey, score };
+    }
+    const tx = A.S[0] + (dx / d) * dd, ty = A.S[1] + (dy / d) * dd;
+    const a2 = Math.atan2(ty - best.ey, tx - best.ex), deg = 180 / Math.PI;
+    // the same turn can be written many ways (+-360): keep the upper arm on its own side, so a
+    // blend between two poses never swings the long way round
+    const wrap = (v, centre) => v - 360 * Math.round((v - centre) / 360);
+    const up = wrap((best.a1 - A.A1) * deg, -A.screen * 90);
+    return [up, wrap((a2 - A.A2) * deg - up, 0)];
   }
 
   // where the ball sits in the hand: past the end of the forearm, along it. A hand-only arm holds
@@ -77,7 +119,7 @@
       return { x: h[0], y: y + near * r * 0.12, spin: T / 180, alpha: 1, squash: 1 - near * 0.15 };
     }
     if (T < RELEASE) {
-      const h = inHand(a, s, T >= SHOOT);
+      const h = s.held || inHand(a, s, T >= SHOOT);         // held: both hands have it (pose() says where)
       s.p0 = h;                                              // where it will leave the hand
       return { x: h[0], y: h[1], spin: T / 400, alpha: 1, squash: 1 };
     }
@@ -219,55 +261,98 @@
       const s = a.state;
       if (!s.ready) return null;                            // the first frame measures the avatar
       const T = a.ms, env = a.envelope(250, 500), out = s.out, dir = s.dir, H = s.charH;
-      const otherSide = s.side === 'R' ? 'L' : 'R';
-      // real arms: rotations of the upper arm and forearm. Hand-only arms: where the hand goes, as
-      // [outwards, upwards (1 = the top of the head), tilt outwards in degrees].
-      let up, low, oUp = 0, oLow = 0, hand = [0, 0, 0], oHand = [0, 0, 0];
-      let bodyY = 0, bodySy = 1, bodyRot = 0, headRot = 0, headY = 0, eyeX = 0, eyeY = 0;
+      const side = s.side, otherSide = side === 'R' ? 'L' : 'R';
       const mix = (p, q, u) => p.map((v, k) => lerp(v, q[k], u));
+      const sub = (p, q) => [p[0] - q[0], p[1] - q[1]];
+      // Real arms: [upper arm, forearm] rotations, from where the hand should be (reachFor).
+      // Hand-only arms: where the hand goes, as [outwards, upwards (1 = the top of the head), tilt].
+      let arm = [0, 0], oArm = [0, 0], hand = [0, 0, 0], oHand = [0, 0, 0];
+      let bodyY = 0, bodySy = 1, bodyRot = 0, headRot = 0, headY = 0, eyeX = 0, eyeY = 0;
+      s.held = null;                                        // where the ball is while both hands have it
+
+      // the ball held in front of the face, and the two hands on it: the throwing hand below and
+      // behind, the other on its far side (stage units)
+      const S = s.arms[side] ? s.arms[side].S : s.face, S2 = s.arms[otherSide] ? s.arms[otherSide].S : s.face;
+      const shot = s.arms[side] ? s.arms[side] : null, guide = s.arms[otherSide] || null;
+      const hands = (b) => [[b[0] + dir * s.r * 0.55, b[1] + s.r * 0.95], [b[0] - dir * s.r * 1.05, b[1] + s.r * 0.25]];
+      // a ball both hands can reach: moved towards the shoulders until they can
+      const mid = [lerp(S[0], S2[0], 0.5), lerp(S[1], S2[1], 0.5)];
+      const fit = (b) => {
+        for (let i = 0; i < 30; i++) {
+          const [h1, h2] = hands(b);
+          const ok = (A, h) => !A || Math.hypot(h[0] - A.S[0], h[1] - A.S[1]) <= (A.L1 + A.L2) * 0.92;
+          if (ok(shot, h1) && ok(guide, h2)) break;
+          b = [lerp(b[0], mid[0], 0.08), lerp(b[1], mid[1], 0.08)];
+        }
+        return b;
+      };
+      const reachLen = shot ? shot.L1 + shot.L2 : s.faceH * 0.5;
+      const chest = fit([mid[0] + dir * s.faceW * 0.12, S[1] + reachLen * 0.12]);   // in front of the chest
+      const forehead = fit([s.face[0] + dir * s.faceW * 0.12, s.top - s.r * 0.4]);  // just above the head, hands at the forehead
+      // fully stretched towards the hoop, from the shoulder
+      const towards = shot ? (() => { const d = sub([s.rim.x, s.rim.y], S), k = (shot.L1 + shot.L2) / Math.hypot(d[0], d[1]); return [S[0] + d[0] * k, S[1] + d[1] * k]; })() : forehead;
+      const released = [towards[0] + (towards[0] - S[0]) * 0.18, towards[1] + (towards[1] - S[1]) * 0.18];   // the ball, just past the hand
+      const letGo = [S2[0] - dir * s.r * 0.6, S2[1] - s.r * 0.6];   // where the guide hand goes once it has let go
+      const fullArms = (main, other) => { arm = reachFor(s, side, main, arm); oArm = reachFor(s, otherSide, other, oArm); };
 
       if (T < GATHER) {                                     // dribble: arm out to the side, pumping
         const p = (T % BOUNCE) / BOUNCE, lift = Math.pow(2 * p - 1, 4);
-        up = out * (26 + 5 * lift);
-        low = out * (12 + 38 * lift);
+        arm = [out * (26 + 5 * lift), out * (12 + 38 * lift)];
         hand = [0.15, 0.4 - 0.1 * (1 - lift), 8 * lift];        // up at the chest, so the bounce shows
         bodyY = H * 0.02 * Math.sin(Math.PI * 2 * p);
         headRot = dir * 3;                                   // watching the ball
         eyeX = dir * 4; eyeY = 5;
-      } else if (T < SHOOT) {                               // catch it, bring it up, crouch
+      } else if (T < SHOOT) {                               // catch it, bring it up to the chest, crouch
         const u = a.ease.inOut(ramp(T, GATHER, SHOOT - GATHER));
-        up = out * lerp(26, 18, u); low = lerp(out * 12, -out * 115, u);
-        oUp = -out * 20 * u; oLow = out * 95 * u;
-        hand = mix([0.15, 0.3, 8], [-0.25, 0.35, -10], u);
-        oHand = mix([0, 0, 0], [-0.2, 0.15, -10], u);
+        const b = chest, [h1, h2] = hands(b);
+        fullArms(h1, h2);
+        arm = [lerp(out * 26, arm[0], u), lerp(out * 12, arm[1], u)];
+        oArm = [oArm[0] * u, oArm[1] * u];
+        s.held = shot ? mix(inHand(a, s), b, clamp((u - 0.2) / 0.6, 0, 1)) : null;   // the ball moves up with the hands
+        hand = mix([0.15, 0.3, 8], [-0.25, 0.35, 0], u);
+        oHand = mix([0, 0, 0], [-0.2, 0.3, 0], u);
         bodyY = H * 0.06 * u; bodySy = 1 - 0.02 * u;
         headRot = dir * 4 * u; eyeX = dir * 6 * u; eyeY = -4 * u;
-      } else if (T < RELEASE + 400) {                       // rise and shoot, then hold the follow-through
-        const u = a.ease.outQuad(ramp(T, SHOOT, RELEASE - SHOOT)), flick = a.ease.outQuad(ramp(T, RELEASE, 250));
-        up = out * lerp(18, 168, u);
-        low = lerp(-out * 115, out * 6, u) + out * 38 * flick;   // the wrist flicks towards the hoop
-        oUp = -out * lerp(20, 110, u); oLow = lerp(out * 95, 0, u);
-        hand = mix([-0.25, 0.35, -10], [0.15, 1, 12], u); hand[2] += 22 * flick;
-        oHand = mix([-0.2, 0.15, -10], [0.05, 0.55, 5], u);
+      } else if (T < RELEASE + 400) {                       // up in front of the face, then push it to the hoop
+        const lift = a.ease.inOut(ramp(T, SHOOT, 260));           // chest -> forehead
+        const push = a.ease.outQuad(ramp(T, SHOOT + 260, RELEASE - SHOOT - 260));   // forehead -> arm stretched
+        const flick = a.ease.outQuad(ramp(T, RELEASE, 250));
+        const b = mix(chest, forehead, lift), bp = mix(b, released, push);
+        const [h1, h2] = hands(b);
+        // the guide hand lets go as the ball is pushed, and goes back to its own side (not across the face)
+        const off = [letGo[0], letGo[1] + s.r * 2 * flick];
+        const away = mix(h2, off, push);
+        fullArms(mix(h1, towards, push), away);
+        arm[1] += out * 25 * flick;                          // the wrist flicks towards the hoop
+        s.held = T < RELEASE && shot ? bp : null;
+        hand = mix(mix([-0.25, 0.35, 0], [-0.2, 0.8, 0], lift), [0.12, 1.05, 10], push); hand[2] += 22 * flick;
+        oHand = mix(mix([-0.2, 0.3, 0], [-0.35, 0.75, 0], lift), [-0.1, 0.5, 0], push);
         const hop = Math.sin(Math.PI * ramp(T, SHOOT + 150, 650));
-        bodyY = lerp(H * 0.06, 0, u) - H * 0.08 * hop; bodySy = 1 + 0.02 * hop;
+        bodyY = lerp(H * 0.06, 0, lift) - H * 0.08 * hop; bodySy = 1 + 0.02 * hop;
         headRot = dir * 7; headY = -H * 0.02; eyeX = dir * 8; eyeY = -8;
       } else {                                              // watch it go in ... then go wild
         const settle = a.ease.inOut(ramp(T, RELEASE + 400, PARTY - RELEASE - 400));
-        up = out * lerp(168, 125, settle); low = out * lerp(38, 10, settle);
-        oUp = -out * lerp(110, 80, settle); oLow = 0;
-        hand = mix([0.15, 1, 34], [0.15, 0.75, 15], settle);
-        oHand = mix([0.05, 0.55, 5], [0.05, 0.4, 5], settle);
+        fullArms(mix(towards, [S[0] + dir * (shot ? shot.L1 * 0.6 : 0), S[1] - (shot ? shot.L1 * 1.2 : 0)], settle),
+          [letGo[0] - dir * s.r * 0.4 * settle, letGo[1] + s.r * (2 + 2 * settle)]);
+        arm[1] += out * 25 * (1 - settle);
+        hand = mix([0.12, 1.05, 32], [0.15, 0.75, 15], settle);
+        oHand = mix([-0.1, 0.5, 0], [0.05, 0.4, 5], settle);
         headRot = dir * 7; headY = -H * 0.02; eyeX = dir * 8; eyeY = -8;
         const w = a.ease.outQuad(ramp(T, PARTY, 260)), c = T - PARTY;
         if (w > 0) {
+          // fists pumping in the air: the hands go up and down above the shoulders, elbows out
           const jump = Math.abs(Math.sin(Math.PI * c / 620)), wave = Math.PI * 2 * c / 330;
-          up = lerp(up, out * (150 + 20 * Math.sin(wave)), w);
-          low = lerp(low, out * 28 * Math.sin(wave + 1), w);
-          oUp = lerp(oUp, -out * (150 + 20 * Math.sin(wave + Math.PI)), w);
-          oLow = lerp(oLow, -out * 28 * Math.sin(wave + Math.PI + 1), w);
-          hand = mix(hand, [0.12 + 0.06 * Math.sin(wave), 0.85 + 0.12 * Math.sin(wave + 0.6), 22 * Math.sin(wave)], w);
-          oHand = mix(oHand, [0.12 + 0.06 * Math.sin(wave + Math.PI), 0.85 + 0.12 * Math.sin(wave + Math.PI + 0.6), 22 * Math.sin(wave + Math.PI)], w);
+          const pump = (sd, phase) => {
+            const A = s.arms[sd];
+            if (!A) return [0, 0];
+            const L = A.L1 + A.L2, screen = sd === 'R' ? 1 : -1;
+            return reachFor(s, sd, [A.S[0] + screen * L * (0.42 + 0.06 * Math.sin(wave + phase)), A.S[1] - L * (0.78 + 0.14 * Math.sin(wave + phase))], [0, 0]);
+          };
+          const p1 = pump(side, 0), p2 = pump(otherSide, Math.PI);
+          arm = [lerp(arm[0], p1[0], w), lerp(arm[1], p1[1], w)];
+          oArm = [lerp(oArm[0], p2[0], w), lerp(oArm[1], p2[1], w)];
+          hand = mix(hand, [0.12 + 0.06 * Math.sin(wave), 0.85 + 0.12 * Math.sin(wave + 0.6), 14 * Math.sin(wave)], w);
+          oHand = mix(oHand, [0.12 + 0.06 * Math.sin(wave + Math.PI), 0.85 + 0.12 * Math.sin(wave + Math.PI + 0.6), 14 * Math.sin(wave + Math.PI)], w);
           bodyY = -H * 0.09 * jump * w;
           bodySy = 1 + 0.03 * (jump - 0.5) * w;
           bodyRot = 4 * Math.sin(Math.PI * 2 * c / 620) * w;
@@ -283,14 +368,22 @@
         eyes: { ox: m(eyeX * H / 300), oy: m(eyeY * H / 300) },
       };
       // one arm: swung, or (only a hand) moved. On the right of the screen, outwards is +x.
-      const put = (side, rotUp, rotLow, h) => {
-        const screen = side === 'R' ? 1 : -1;
-        if (s.handOnly[side]) result['arm' + side + 'Upper'] = { ox: m(screen * h[0] * s.reach), oy: m(-h[1] * s.reach), rot: m(screen * h[2]) };
-        else { result['arm' + side + 'Upper'] = { rot: m(rotUp) }; result['arm' + side + 'Lower'] = { rot: m(rotLow) }; }
+      const put = (sd, rot, h) => {
+        const screen = sd === 'R' ? 1 : -1;
+        if (s.handOnly[sd]) result['arm' + sd + 'Upper'] = { ox: m(screen * h[0] * s.reach), oy: m(-h[1] * s.reach), rot: m(screen * h[2]) };
+        else { result['arm' + sd + 'Upper'] = { rot: m(rot[0]) }; result['arm' + sd + 'Lower'] = { rot: m(rot[1]) }; }
       };
-      put(s.side, up, low, hand);
-      put(otherSide, oUp, oLow, oHand);
+      put(side, arm, hand);
+      put(otherSide, oArm, oHand);
       return result;
+    },
+
+    // from the catch to the end, the arms are drawn in front of the head and body
+    inFront(a) {
+      if (a.ms < GATHER - 100 || !a.state.ready) return null;
+      const ids = [];
+      for (const sd of [a.state.side === 'R' ? 'L' : 'R', a.state.side]) ids.push('arm' + sd + 'Upper', 'arm' + sd + 'Lower');
+      return ids;
     },
 
     states(a) {

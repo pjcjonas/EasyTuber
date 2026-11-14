@@ -394,6 +394,22 @@
     },
     get hasPartFx() { return this.running.some((r) => typeof r.def.parts === 'function'); },
 
+    /* The draw order this frame: the project's, with the parts that running actions bring to the
+       front (their inFront() hook, e.g. ['armRUpper', 'armRLower']) moved on top, in that order.
+       Returns the project's own order when no action asks. */
+    drawOrder(order) {
+      let front = null;
+      for (const r of this.running.slice()) {
+        if (typeof r.def.inFront !== 'function') continue;
+        const ids = this.call(r, 'inFront', this.now, this.project);
+        if (!Array.isArray(ids)) continue;
+        for (const id of ids) if (typeof id === 'string' && order.includes(id)) (front = front || []).push(id);
+      }
+      if (!front) return order;
+      const top = [...new Set(front)];
+      return order.filter((id) => !top.includes(id)).concat(top);
+    },
+
     /* drawing hooks: layer = 'behind' (before the avatar) or 'front' (after it).
        The canvas is set to stage units: (0, 0) top-left, PT.STAGE_W x PT.STAGE_H. */
     draw(layer, renderer) {

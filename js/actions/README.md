@@ -78,6 +78,7 @@ PT.Actions.define({
   - Children follow their parent: rotating `torso` carries the head and arms with it.
 - **`states(a)`** overrides the eye and mouth frames, for example `{ eyes: 'closed', mouth: 'open' }`. Eyes take `open half closed`; mouth takes `closed half open`.
   - It can also put one of the user's expressions on while the action plays: `{ expression: 'happy' }`. The id is the expression's name in small letters with `-` for anything else (`a.project.expressions` lists them). An expression the user doesn't have changes nothing.
+- **`inFront(a)`** brings parts to the front while the action plays: return their ids, for example `['armRUpper', 'armRLower']`, and they are drawn on top of the rest, in that order. Return nothing to leave the stacking alone. Useful when an arm reaches across the face.
 - **`parts(a, partId)`** moves one part on its own, in screen space, without moving its children. This is how the avatar-switch animation works. It returns `{ dx, dy, rot, scale, alpha, hide }` or `null`.
 - **`behind(a, g)`** and **`front(a, g)`** draw on the canvas behind or in front of the avatar. `g` is a CanvasRenderingContext2D already set to stage units: (0, 0) is the top-left of the stage and `PT.STAGE_W` × `PT.STAGE_H` is the bottom-right. Save and restore yourself if you change more than drawing state.
 
