@@ -127,7 +127,7 @@
         if (now - this._liveLast < 33) return;
         this._liveLast = now;
       }
-      fetch('api/live', { method: 'POST', body: JSON.stringify(msg), keepalive: true }).catch(() => {});
+      fetch('api/live', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg), keepalive: true }).catch(() => {});
     },
 
     // one event stream per page, shared by onMessage and onHotkey

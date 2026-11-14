@@ -275,3 +275,40 @@ test('a hotkey press plays an action from the server, avatar keys go to the edit
   assert.equal(ev[0].data.id, 'wave');
   assert.deepEqual(ev[1], { ...ev[1], event: 'hotkey', data: { action: 'random' } });
 });
+
+/* ---------------- /api/live and the local-only rule ---------------- */
+
+test('/api/live passes the editor\'s messages on, JSON only, and never an action', async (t) => {
+  const { srv, sse } = await server(t, 18830);
+  const json = { 'Content-Type': 'application/json' };
+  const live = (body, headers = json) => request(srv.port, 'POST', '/api/live', body, headers);
+
+  assert.equal((await live(JSON.stringify({ type: 'level', v: 0.5 }))).status, 204);
+  assert.deepEqual((await sse.waitFor(1))[0], { event: 'live', data: { type: 'level', v: 0.5 }, at: sse.events[0].at });
+
+  // what a form or a script on another website can send without asking first
+  assert.equal((await live(JSON.stringify({ type: 'level', v: 1 }), {})).status, 415);
+  assert.equal((await live(JSON.stringify({ type: 'level', v: 1 }), { 'Content-Type': 'text/plain' })).status, 415);
+  // actions only start at /api/streamerbot or a hotkey
+  assert.equal((await live(JSON.stringify({ type: 'action', id: 'wave', n: 'x', seed: 1 }))).status, 400);
+  assert.equal((await live('[1]')).status, 400);
+  assert.equal((await live('null')).status, 400);
+  assert.equal((await live('{')).status, 400);
+
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(sse.events.length, 1);
+});
+
+test('the API only answers to a local address', async (t) => {
+  const { srv } = await server(t, 18831);
+  const as = (host, p = '/api/ping') => request(srv.port, 'GET', p, undefined, { Host: host });
+  assert.equal((await as(`127.0.0.1:${srv.port}`)).status, 200);
+  assert.equal((await as(`localhost:${srv.port}`)).status, 200);
+  // another site's name pointed at this computer
+  assert.equal((await as(`evil.example:${srv.port}`)).status, 403);
+  assert.equal((await as('evil.example')).status, 403);
+  assert.equal((await as(`evil.example:${srv.port}`, '/api/project')).status, 403);
+  assert.equal((await as(`evil.example:${srv.port}`, '/api/events')).status, 403);
+  // the page itself is not secret
+  assert.equal((await as(`evil.example:${srv.port}`, '/')).status, 200);
+});

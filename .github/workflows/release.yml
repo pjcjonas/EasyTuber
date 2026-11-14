@@ -42,7 +42,8 @@ jobs:
       - name: Add koffi's binaries for both Mac processors
         # npm only installs the one for this runner's processor; the virtual camera needs it in each build
         run: |
-          v=$(node -p "require('koffi/package.json').version")
+          # read the file: koffi doesn't let require() reach its package.json
+          v=$(node -p "JSON.parse(require('fs').readFileSync('node_modules/koffi/package.json', 'utf8')).version")
           npm install --no-save --force "@koromix/koffi-darwin-arm64@$v" "@koromix/koffi-darwin-x64@$v"
       - run: npm run dist:mac
       - name: Ad-hoc sign and zip
