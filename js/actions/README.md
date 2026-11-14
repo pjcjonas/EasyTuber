@@ -1,6 +1,6 @@
 # Actions: your own animations
 
-An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER ships with no actions. Each one you add is a single file.
+An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. Each one is a single file. EASY-TUBER comes with one, `basketball.js` in this folder, which is also a full example of a bigger action: phases on a timeline, a ball and a hoop drawn in `front()`, confetti made from `a.random()` in `start()`, and arms that are handled whether or not they have a forearm.
 
 ## Adding one
 
@@ -64,6 +64,8 @@ PT.Actions.define({
 | `a.state` | an empty object for this run, to keep things between frames |
 | `a.args` | the values this play came with, from the Streamer.bot URL: `…?action=wave&user=Bob&amount=500` gives `a.args.user === 'Bob'` and `a.args.amount === '500'`. Every value is text, so use `Number(a.args.amount)` for a number. It is an empty object when there are none (Test, a hotkey), so give each value a fallback: `a.args.user \|\| 'someone'`. |
 | `a.at(partId, u, v)` | where a point on a part is right now, in stage units. `u, v` are 0..1 across the part's image, so `a.at('armRLower', 0.5, 1)` is the bottom of the right forearm (the hand) |
+| `a.atArt(partId, u, v)` | the same, but `u, v` are 0..1 across the drawn part of the image, leaving out its transparent margins. Use it when the art may fill a whole canvas, as layers from a PSD do: `a.atArt('armRLower', 0.5, 1)` is still the hand. |
+| `a.artSize(partId)` | how big a part's drawing is on the stage right now: `{ w, h }` in stage units, for sizing things to the avatar |
 | `a.image(src)` | a cached picture, for example `a.image('media/actions/wave/sparkle.png')`. It is `null` until it has loaded. |
 | `a.sound(src, { volume })` | plays a sound, for example `a.sound('user-actions/wave/whoosh.mp3')`. `volume` is 0 to 1. It starts once per run however often you call it, so you can call it from `pose()` when the moment comes: `if (a.t > 0.5) a.sound(…)`. |
 | `a.project` | the whole project (read only) |

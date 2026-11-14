@@ -294,6 +294,14 @@
         between(from, to) { return hold ? 0 : clamp01((ms / d - from) / Math.max(1e-6, to - from)); },
         // where a point on a part is right now, in stage units. u, v = 0..1 across the part's image
         at(partId, u = 0.5, v = 0.5) { return self.partPoint(partId, u, v); },
+        // the same, but u, v = 0..1 across the drawn part of the image, leaving out its transparent
+        // margins: a.atArt('armRLower', 0.5, 1) is the hand even when the art fills a whole canvas
+        atArt(partId, u = 0.5, v = 0.5) { return self.partPoint(partId, u, v, true); },
+        // how big a part's drawing is on the stage right now: { w, h } in stage units
+        artSize(partId) {
+          const d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+          return { w: d(self.partPoint(partId, 0, 0.5, true), self.partPoint(partId, 1, 0.5, true)), h: d(self.partPoint(partId, 0.5, 0, true), self.partPoint(partId, 0.5, 1, true)) };
+        },
         image: (src) => self.image(src),
         // play a sound once in this run; a sound longer than the action plays to its end
         sound: (src, opts) => self.playSound(run, src, opts, project || (PT.App && PT.App.project)),
@@ -359,12 +367,13 @@
     /* after the pose is built: lets a.at() find parts */
     setPose(pose, renderer) { this.pose = pose; this.view = renderer.view(); },
 
-    partPoint(partId, u, v) {
+    partPoint(partId, u, v, art = false) {
       const pose = this.pose, part = pose && pose[partId];
       if (!part || !this.view) return [PT.STAGE_W / 2, PT.STAGE_H / 2];
       const e = PT.Assets.primary(partId, this.project && this.project.stage.placeholders);
-      const w = e ? e.w : 0, h = e ? e.h : 0;
-      const [cx, cy] = PT.M.apply(part.world, u * w, v * h);
+      // the whole image, or (art) only its drawn part
+      const b = !e ? { x: 0, y: 0, w: 0, h: 0 } : art && e.bbox ? e.bbox : { x: 0, y: 0, w: e.w, h: e.h };
+      const [cx, cy] = PT.M.apply(part.world, b.x + u * b.w, b.y + v * b.h);
       return PT.M.apply(PT.M.inv(this.view), cx, cy);
     },
 
