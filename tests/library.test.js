@@ -1,0 +1,72 @@
+/* The parts library: what is kept in the project, how a part's pictures fit another part, and
+   that the library's pictures are stored and saved like an avatar's. */
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+function loadPT() {
+  const ctx = { window: {}, navigator: { platform: 'Win32' }, structuredClone, console };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const f of ['util.js', 'defs.js', 'library.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
+  return ctx.PT;
+}
+const plain = (o) => JSON.parse(JSON.stringify(o));
+const A = 'img:' + 'a'.repeat(64), B = 'img:' + 'b'.repeat(64), C = 'data:image/png;base64,AAAA';
+
+test('the library is kept with the project, cleaned', () => {
+  const PT = loadPT();
+  const p = PT.normalizeProject({
+    library: [
+      { id: 'l1', name: ' Red hat ', part: 'face', images: { main: A, junk: 'not a picture', 'main@happy': B }, place: { x: 1, y: 2, rot: 3, scale: 1, px: 4, py: 5, flip: 1 }, at: 7 },
+      { id: 'l1', name: 'twice', part: 'face', images: { main: A } },             // same id again
+      { id: 'bad id', name: 'x', images: { main: A } }, null, 'l9',
+      { id: 'l2', name: '', part: 'nowhere', images: { open: C }, place: { x: 'left' } },
+      { id: 'l3', name: 'no pictures', part: 'eyes', images: { open: 'http://example.com/x.png' } },
+    ],
+  });
+  assert.deepEqual(plain(p.library), [
+    { id: 'l1', name: 'Red hat', part: 'face', images: { main: A, 'main@happy': B }, adj: {}, place: { x: 1, y: 2, rot: 3, scale: 1, px: 4, py: 5, flip: true }, at: 7 },
+    { id: 'l2', name: 'Part', part: '', images: { open: C }, adj: {}, place: null, at: 0 },   // unknown part: for any part
+  ]);
+  assert.deepEqual(plain(PT.normalizeProject({}).library), []);          // older files have none
+  assert.deepEqual(plain(PT.defaultProject().library), []);
+  const many = Array.from({ length: 600 }, (_, i) => ({ id: 'l' + i, images: { main: A } }));
+  assert.equal(PT.normalizeProject({ library: many }).library.length, 500);
+  // a look (one avatar) never carries the library
+  assert.ok(!PT.LOOK_KEYS.includes('library'));
+});
+
+test('a part\'s pictures are fitted to the part they are put on', () => {
+  const PT = loadPT();
+  const L = PT.Library;
+  // the same kind of part: every state comes along, with its expression pictures
+  assert.deepEqual(plain(L.fitImages({ open: A, closed: B, 'open@happy': C }, 'eyes')), { open: A, closed: B, 'open@happy': C });
+  // eyes onto a one-picture part: the open eyes stand for it
+  assert.deepEqual(plain(L.fitImages({ closed: B, open: A }, 'face')), { main: A });
+  // one picture onto the eyes: it becomes the open eyes
+  assert.deepEqual(plain(L.fitImages({ main: A }, 'eyes')), { open: A });
+  // the mouth's vowel shapes are kept on a mouth
+  assert.deepEqual(plain(L.fitImages({ closed: A, a: B }, 'mouth')), { closed: A, a: B });
+  assert.deepEqual(plain(L.fitImages({}, 'face')), {});
+  assert.deepEqual(plain(L.fitImages({ main: A }, 'no-such-part')), {});
+  assert.deepEqual(plain(L.fitImages({ main: 'javascript:alert(1)' }, 'face')), {});   // only pictures
+  // the cover picture: the first state that has one
+  assert.equal(L.cover({ closed: B, open: A }, 'eyes'), A);
+  assert.equal(L.cover({ half: B }, 'eyes'), B);
+  assert.equal(L.cover({ 'main@happy': B, main: A }, 'face'), A);
+  assert.equal(L.cover({}, 'face'), null);
+});
+
+test('the library\'s pictures are stored as files and inlined by Save file, like an avatar\'s', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'storage.js'), 'utf8');
+  const ctx = { window: {}, navigator: {}, console, indexedDB: undefined, location: { protocol: 'http:', port: '8777', search: '' }, fetch: () => Promise.reject(new Error('offline')) };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'util.js'), 'utf8'), ctx);
+  vm.runInContext(src, ctx);
+  const slots = ctx.PT.Storage.pictureSlots({ parts: { face: { images: { main: A } } }, avatars: [], library: [{ id: 'l1', images: { main: B, open: C } }] });
+  assert.equal(slots.map(([o, k]) => o[k]).join(), [A, B, C].join());
+});

@@ -234,6 +234,7 @@
        kept beside its normal images as images['<state>@<expression id>'], e.g. 'open@happy' or
        'main@happy'; a part with no image for the expression shows its normal one. */
     expressions: [],                     // [{ id, name, hotkey }]
+    library: [],                         // the parts library, shared by every avatar (see library.js)
     expression: '',                      // the one on screen ('' = normal)
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
@@ -294,6 +295,23 @@
       .slice(0, PT.MAX_EXPRESSIONS)
       .map((x) => ({ id: x.id, name: str(x.name, 40).trim() || x.id, hotkey: str(x.hotkey, 64) }));
     out.expression = out.expressions.some((x) => x.id === p.expression) ? p.expression : '';
+    // the parts library: kept as long as an entry has a picture; a part that no longer exists
+    // (a deleted custom part) makes it a part for anywhere
+    const picture = (v) => typeof v === 'string' && v.length < 64 * 1024 * 1024 && (/^img:[0-9a-f]{64}$/.test(v) || /^data:image\//.test(v));
+    const libIds = new Set(), num = (v) => (Number.isFinite(v) ? v : undefined);
+    out.library = (Array.isArray(p.library) ? p.library : [])
+      .filter((x) => x && typeof x.id === 'string' && /^l[\w-]{1,40}$/.test(x.id) && !libIds.has(x.id) && libIds.add(x.id))
+      .map((x) => {
+        const images = {};
+        for (const [k, v] of Object.entries(x.images && typeof x.images === 'object' ? x.images : {})) if (/^[\w-]{1,40}(@[\w-]{1,40})?$/.test(k) && picture(v)) images[k] = v;
+        const pl = x.place && typeof x.place === 'object' ? x.place : null;
+        const place = pl && ['x', 'y', 'rot', 'scale', 'px', 'py'].every((k) => Number.isFinite(pl[k]))
+          ? { x: pl.x, y: pl.y, rot: pl.rot, scale: pl.scale, px: pl.px, py: pl.py, flip: !!pl.flip } : null;
+        return { id: x.id, name: str(x.name, 60).trim() || 'Part', part: typeof x.part === 'string' && PT.PART[x.part] ? x.part : '', images,
+          adj: x.adj && typeof x.adj === 'object' ? x.adj : {}, place, at: num(x.at) || 0 };
+      })
+      .filter((x) => Object.keys(x.images).length)
+      .slice(0, 500);
     out.hotkeys = { next: str((p.hotkeys || {}).next, 64), random: str((p.hotkeys || {}).random, 64) };
     out.switchFx = p.switchFx !== false;
     // per action (js/actions/*.js): its global hotkey and its settings. Shared by every avatar.
