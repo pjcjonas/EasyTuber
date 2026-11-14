@@ -272,6 +272,8 @@ Only add action files you trust. An action is a small program that runs inside E
 * **Set key** gives it a global hotkey, with the same rules as the avatar hotkeys.
 * **Settings** (when the action has any) are its own sliders and checkboxes. They are saved with your avatar file.
 
+**Actions that stay on.** Some actions are *held*: they stay on until you turn them off, like a "be right back" pose. Their button says **▶ Turn on** and then **■ Turn off**, and their hotkey switches them the same way. **■ Stop all actions** stops everything that is playing.
+
 **Sounds.** Some actions come with sounds. Under **Sounds** in the Actions tab, choose where they play, and set one volume for all of them:
 
 * **In EASY-TUBER (this window)** plays through your speakers. Your stream hears it if you capture desktop sound, and so do you.
@@ -284,7 +286,8 @@ Only add action files you trust. An action is a small program that runs inside E
 2. Click **Copy** to copy the address.
 3. In Streamer.bot on the same computer, add a **Fetch URL** sub-action and paste the address. Add the header `X-EasyTuber-Control` with the value `streamerbot`.
 
-4. Some actions use values, such as a name to show. Type them in **Values for the action**, for example `user=%user%&amount=500`, and they are added to the address. Streamer.bot fills in its own variables, like `%user%`, when it sends it.
+4. For a held action, the address turns it on, and off again if it is already on. The tab shows the two other addresses you may want: one that only turns it on, and one that turns it off. Use those when one trigger starts it and another ends it.
+5. Some actions use values, such as a name to show. Type them in **Values for the action**, for example `user=%user%&amount=500`, and they are added to the address. Streamer.bot fills in its own variables, like `%user%`, when it sends it.
 
 Keep EASY-TUBER running while you stream.
 

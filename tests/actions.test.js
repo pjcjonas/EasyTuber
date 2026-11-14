@@ -567,3 +567,131 @@ test('the server sends sounds and pictures with their types', async (t) => {
   assert.equal(part.statusCode, 206);
   assert.equal(part.headers['content-range'], 'bytes 2-5/10');
 });
+
+/* ---------------- held actions ---------------- */
+
+test('a held action runs until it is released, then blends out over its release time', () => {
+  const PT = loadPT();
+  const made = fakeAudio(PT);
+  const log = [];
+  let changes = 0;
+  PT.Actions.onHeld = () => { changes++; };
+  const d = PT.Actions.define({
+    id: 'brb', label: 'BRB', hold: true, release: 400, overlap: true,
+    start() { log.push('start'); },
+    pose(a) {
+      a.sound('hum.mp3', { loop: true });
+      log.push([a.held, a.t, a.duration, +a.releasing.toFixed(2), +a.envelope(100).toFixed(2), a.between(0, 1)].join(' '));
+      return { torso: { oy: 100 * a.envelope(100) } };
+    },
+    end() { log.push('end'); },
+  });
+  assert.equal(d.hold, true);
+  assert.equal(d.release, 400);
+  assert.equal(d.overlap, false);                        // one copy of a held action
+  assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.catalog())), [{ id: 'brb', label: 'BRB', duration: 0, hold: true }]);
+  assert.equal(PT.Actions.define({ id: 'h2', hold: true }).release, 300);
+  assert.equal(PT.Actions.define({ id: 'h3', hold: true, release: 99999 }).release, 5000);
+  assert.throws(() => PT.Actions.define({ id: 'nohold' }));  // an ordinary action still needs a duration
+
+  const p = PT.normalizeProject({ parts: {} });
+  PT.Actions.play('brb', { n: 'a' }, p, 0);
+  assert.equal(PT.Actions.isHeld('brb'), true);
+  assert.equal(PT.Actions.update(50, p).deltas.torso.oy, 50);          // blending in
+  assert.equal(PT.Actions.update(10 * 60 * 1000, p).deltas.torso.oy, 100);   // ten minutes on: still on
+  assert.equal(made.length, 1);
+  assert.equal(made[0].loop, true);
+
+  PT.Actions.release('brb', 600000);
+  assert.equal(PT.Actions.isHeld('brb'), false);          // on its way out
+  PT.Actions.release('brb', 600100);                      // asked twice: the first time counts
+  assert.equal(PT.Actions.update(600200, p).deltas.torso.oy, 50);      // halfway out
+  assert.equal(made[0].playing, true);
+  assert.equal(PT.Actions.update(600400, p), null);       // gone
+  assert.equal(made[0].playing, false);                   // its looping sound went with it
+  assert.deepEqual(log, ['start', 'true 0 Infinity 0 0.5 0', 'true 0 Infinity 0 1 0', 'true 0 Infinity 0.5 0.5 0', 'end']);
+  assert.equal(changes, 3);                               // on, release asked twice
+
+  // release() stops an ordinary action at once, and with no id it stops everything
+  PT.Actions.define({ id: 'wave', duration: 5000 });
+  PT.Actions.play('wave', {}, p, 0); PT.Actions.play('brb', { n: 'b' }, p, 0);
+  PT.Actions.release('wave', 10);
+  assert.equal(PT.Actions.running.map((r) => r.def.id).join(), 'brb');
+  PT.Actions.play('wave', {}, p, 20);
+  PT.Actions.release(undefined, 30);
+  assert.equal(PT.Actions.running.map((r) => r.def.id).join(), 'brb');   // blending out
+  assert.equal(PT.Actions.update(500, p), null);
+});
+
+test('/api/streamerbot switches a held action on and off, and stop= stops', async (t) => {
+  const { srv, sse, setCatalog, sb } = await server(t, 18870);
+  const cat = [{ id: 'brb', label: 'BRB', duration: 0, hold: true }, { id: 'wave', label: 'Wave', duration: 100 }];
+  assert.equal((await setCatalog(cat)).status, 200);
+  assert.equal((await setCatalog([{ id: 'x', label: 'X', duration: 0 }])).status, 400);    // no length and not held
+  await setCatalog(cat);
+  const body = async (q) => { const r = await sb(q); return [r.status, JSON.parse(r.body)]; };
+
+  assert.deepEqual(await body('action=brb&user=Bob'), [202, { accepted: true, on: true }]);
+  assert.deepEqual(await body('action=brb&hold=on'), [202, { accepted: true, on: true }]);   // already on: nothing sent
+  assert.deepEqual(await body('action=brb'), [202, { accepted: true, on: false }]);           // the other way
+  assert.deepEqual(await body('action=brb&hold=off'), [202, { accepted: true, on: false }]);  // already off
+  assert.deepEqual(await body('action=brb&hold=on'), [202, { accepted: true, on: true }]);
+  assert.deepEqual(await body('stop=brb'), [202, { accepted: true, on: false }]);
+  assert.deepEqual(await body('action=wave'), [202, { accepted: true }]);
+  let evs = await sse.waitFor(5);
+  assert.deepEqual(evs.map((e) => [e.data.type, e.data.id]), [['action', 'brb'], ['action-stop', 'brb'], ['action', 'brb'], ['action-stop', 'brb'], ['action', 'wave']]);
+  assert.deepEqual(evs[0].data.args, { user: 'Bob' });
+
+  for (const q of ['action=wave&hold=on', 'action=brb&hold=maybe', 'sequence=brb,wave&hold=on', 'stop=brb&user=x', 'stop=brb&stop=wave', 'action=brb&stop=brb']) {
+    assert.equal((await sb(q)).status, 400, q);
+  }
+  assert.equal((await sb('stop=nope')).status, 404);
+
+  // a page that connects while it is on is told; one that connects after is not
+  await sb('action=brb&hold=on');
+  const startMsg = (await sse.waitFor(6))[5].data;
+  const late = listen(srv.port);
+  await late.ready;
+  assert.deepEqual((await late.waitFor(1))[0].data, startMsg);            // the same play, so the same nonce and seed
+
+  // a global hotkey is the same switch
+  srv.trigger('action:brb');
+  assert.deepEqual((await sse.waitFor(7))[6].data, { type: 'action-stop', id: 'brb' });
+  srv.trigger('action:brb');
+  await sse.waitFor(8);
+
+  // stop=all: everything, and the sequence that was waiting
+  assert.equal((await sb('sequence=wave,wave&delay=0.3')).status, 202);
+  assert.deepEqual(await body('stop=all'), [202, { accepted: true }]);
+  evs = await sse.waitFor(10);
+  assert.deepEqual(evs.slice(8).map((e) => e.data), [{ type: 'action', id: 'wave', n: evs[8].data.n, seed: evs[8].data.seed }, { type: 'action-stop' }]);
+  await new Promise((r) => setTimeout(r, 450));
+  assert.equal(sse.events.length, 10);                                    // the second wave never played
+  assert.equal((await sb('sequence=wave')).status, 202);                  // and nothing is stuck
+  late.close();
+  const after = listen(srv.port);
+  await after.ready;
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(after.events.length, 0);
+  after.close();
+
+  // the editor reloads without the held action's file: it can't be left on
+  const before = sse.events.length;
+  await sb('action=brb');
+  const n = (await sse.waitFor(before + 1)).length;
+  await setCatalog([{ id: 'wave', label: 'Wave', duration: 100 }]);
+  assert.deepEqual((await sse.waitFor(n + 1))[n].data, { type: 'action-stop', id: 'brb' });
+
+  // pages can't be told to stop through /api/live either
+  const json = { 'Content-Type': 'application/json' };
+  assert.equal((await request(srv.port, 'POST', '/api/live', JSON.stringify({ type: 'action-stop' }), json)).status, 400);
+});
+
+test('a held step in a sequence does not make the next step wait', async (t) => {
+  const { sse, setCatalog, sb } = await server(t, 18871);
+  await setCatalog([{ id: 'brb', label: 'BRB', duration: 0, hold: true }, { id: 'wave', label: 'Wave', duration: 100 }]);
+  assert.equal((await sb('sequence=brb,wave')).status, 202);
+  const evs = await sse.waitFor(2);
+  assert.deepEqual(evs.map((e) => e.data.id), ['brb', 'wave']);
+  assert.ok(evs[1].at - evs[0].at < 80, `waited ${evs[1].at - evs[0].at} ms`);
+});
