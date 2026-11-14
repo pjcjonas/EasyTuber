@@ -1,6 +1,7 @@
 /* Boot, main loop, top bar, meter, keyboard, drag & drop, stage window. */
 (function (PT) {
   const $ = (id) => document.getElementById(id);
+  const FRAME_MIN_MS = 1000 / 75;   // the least time between two drawn frames (see frame())
 
   const App = {
     project: null,
@@ -10,6 +11,7 @@
     level: 0,
     simTalk: false,
     stageMode: false,
+    stepped: 0,          // when running actions were last moved on (by a frame, or by the timer in init)
     remote: { v: 0, t: -1e9 },
     lastPose: null,
     lastAnim: null,
@@ -44,6 +46,12 @@
       this.renderer.resize();
       this.last = performance.now();
       requestAnimationFrame((t) => this.frame(t));
+      /* A minimised window gets about one frame a second. Actions must not wait for it: their
+         sounds, timed steps and endings are kept on time from a timer while frames are scarce. */
+      setInterval(() => {
+        const now = performance.now();
+        if (now - this.stepped > 25 && PT.Actions.active) { this.stepped = now; PT.Actions.update(now, this.project); }
+      }, 33);
     },
 
     /* ---------------- stage window (for OBS) ---------------- */
@@ -393,6 +401,10 @@
 
     /* ---------------- main loop ---------------- */
     frame(now) {
+      /* The screen may refresh 144 or 240 times a second; the avatar doesn't need to be worked out
+         and drawn that often. Skipping frames that come too soon keeps it between 55 and 75 a second
+         on fast screens, and changes nothing on a 60 Hz one. */
+      if (now - this.last < FRAME_MIN_MS) { requestAnimationFrame((tt) => this.frame(tt)); return; }
       const dt = Math.min(0.1, (now - this.last) / 1000);
       this.last = now;
       const t = now / 1000;
@@ -413,6 +425,7 @@
 
       const anim = this.animator.update(dt, level, p.motion, p.mic);
       this.lastAnim = anim;
+      this.stepped = now;
       const act = PT.Actions.update(now, p);   // running actions: extra motion + eye / mouth overrides
 
       const editing = !this.stageMode && this.mode === 'edit';
