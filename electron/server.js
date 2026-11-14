@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const images = require('./images');
+const backups = require('./backups');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -341,6 +342,25 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         });
       }
 
+      /* Backups of the avatar file (see backups.js). GET lists them, POST makes one now (before a
+         reset or a restore), GET /api/backups/<id> sends one for the editor to load. */
+      if (urlPath === '/api/backups' && req.method === 'GET') return sendJson(res, 200, { backups: await backups.list(saveFile) });
+      if (urlPath === '/api/backups' && req.method === 'POST') {
+        if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
+        let data;
+        try { data = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+        if (!data || !['reset', 'restore'].includes(data.reason)) return sendJson(res, 400, { error: 'unknown reason' });
+        const made = await backups.make(saveFile, data.reason);
+        return sendJson(res, 200, { ok: true, backup: made, backups: await backups.list(saveFile) });
+      }
+      const backup = /^\/api\/backups\/(backup-\d{13}-[a-z]+)$/.exec(urlPath);
+      if (backup && req.method === 'GET') {
+        let text;
+        try { text = await backups.read(saveFile, backup[1]); } catch (e) { return sendJson(res, 404, { error: 'no such backup' }); }
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(text), 'Cache-Control': 'no-store' });
+        return res.end(text);
+      }
+
       // "Open actions folder" in the editor: the desktop app shows the folder in the file manager
       if (urlPath === '/api/open-folder' && req.method === 'POST') {
         if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
@@ -502,13 +522,15 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   server.on('close', () => clearTimeout(sequenceTimer));
 
   /* Before the first page asks for the avatar: move pictures still inside the avatar file (files
-     from before v1.9) out into the images folder, then clear out pictures nothing has used for a
-     month. Neither may stop the app from starting. */
+     from before v1.9) out into the images folder, clear out pictures nothing has used for a
+     month, and keep a backup of the avatar file. None of these may stop the app from starting. */
   const prepare = images.migrate(saveFile, imagesDir)
     .then((moved) => { if (moved.count) console.log(`Moved ${moved.count} pictures out of the avatar file (the old file is kept as ${path.basename(moved.backup)})`); })
     .catch((e) => console.error('Could not move the pictures out of the avatar file; it is left as it was.', e))
     .then(() => images.sweep(saveFile, imagesDir))
-    .catch((e) => console.error('Could not tidy the images folder.', e));
+    .catch((e) => console.error('Could not tidy the images folder.', e))
+    .then(() => backups.make(saveFile, 'start'))   // the avatar as this session found it
+    .catch((e) => console.error('Could not back up the avatar file.', e));
 
   return prepare.then(() => new Promise((resolve, reject) => {
     let p = port;

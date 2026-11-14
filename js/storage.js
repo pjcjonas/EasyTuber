@@ -186,6 +186,9 @@
       if (this.server) this.putServer(JSON.stringify(project));
     },
 
+    // resolves once every save so far has reached the avatar file (save() itself doesn't wait for that)
+    async settled() { while (this._putBusy) await new Promise((r) => setTimeout(r, 20)); },
+
     // one upload at a time; if more saves arrive meanwhile only the latest is sent
     async putServer(body) {
       if (this._putBusy) { this._putNext = body; return; }
@@ -267,6 +270,27 @@
       } catch (e) { console.warn(e); return { files: [], folder: '' }; }
     },
     /* Show the user's actions folder in the file manager (desktop app only). Throws with the reason. */
+    /* ---- backups of the avatar file (desktop app) ---- */
+    // newest first: [{ id, at, reason, size }]
+    async backups() {
+      if (!this.server) return [];
+      const r = await fetch('api/backups');
+      if (!r.ok) throw new Error('server said ' + r.status);
+      return (await r.json()).backups || [];
+    },
+    // keep a copy of the avatar file as it is saved right now
+    async makeBackup(reason) {
+      if (!this.server) return null;
+      const r = await fetch('api/backups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);
+      return (await r.json()).backup;
+    },
+    async readBackup(id) {
+      const r = await fetch('api/backups/' + encodeURIComponent(id));
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);
+      return r.json();
+    },
+
     async openActionsFolder() {
       const r = await fetch('api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: 'actions' }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);

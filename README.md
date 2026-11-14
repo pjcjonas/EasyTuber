@@ -345,13 +345,14 @@ The **Stage** tab also has the editor options (placeholder art, joints and bones
 * **Your pictures are files** in the `images` folder beside it. The avatar file only names them, so it stays small and saves quickly however much art you have. A picture used by several avatars is stored once.
 * **Save file** downloads the avatar as one `.easytuber.json` file with the pictures inside it. Use it for backups or to move to another computer.
 * **Open file** loads a saved `.easytuber.json`.
-* **Reset** removes all uploads and settings. Save a file first if you might want them back.
+* **Reset** removes all uploads and settings. The avatar you had is kept as a backup.
+* **Backups.** The app keeps a copy of your avatar file each time it starts, and before a reset. The newest 5 are listed in the **Stage** tab under **Backups**; **Restore** goes back to one, and the avatar you had at that moment becomes a backup too. They sit beside the avatar file as `avatar.easytuber.json.backup-…`.
 
 To move or back up an avatar, use **Save file**. Copying `avatar.easytuber.json` on its own leaves the pictures behind, and **Open file** will say so.
 
 **Coming from v1.8 or older.** The first time this version starts, it moves the pictures out of your avatar file into the `images` folder. The file as it was is kept beside it as `avatar.easytuber.json.before-images.bak`; you can delete it once you are happy.
 
-A picture that no avatar uses any more is removed from the `images` folder a month later.
+A picture that no avatar and no backup uses any more is removed from the `images` folder, never sooner than a month after it was added.
 
 An avatar made with the old browser version (`saved\avatar.pngtuber.json` next to the app) is imported on first launch.
 
@@ -431,6 +432,7 @@ git push origin v1.0.1
 electron/main.js    desktop app window, mic permission, stage window
 electron/server.js  local server: serves the app to OBS, saves the avatar file, relays the mic, lists and plays actions
 electron/images.js  the avatar's pictures as files: storing, moving them out of an old avatar file, clearing unused ones
+electron/backups.js the newest 5 copies of the avatar file: at each start, before a reset or a restore
 electron/vcam.js    virtual camera: sends frames to the OBS Virtual Camera driver (Windows and macOS, through koffi)
 build/              logo, icons, the macOS microphone and camera permission text
 media/intro.mp4     the start-up intro
