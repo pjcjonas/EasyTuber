@@ -329,9 +329,11 @@ Only add action files you trust. An action is a small program that runs inside E
 
 **Play an action**
 
+Choose the action in the dropdown at the top of **Your actions**. Below it are that action's Test button, hotkey and settings; choose another action to see its own. The app remembers which one you had chosen.
+
 * **▶ Test** plays it in the editor, the stage window and OBS at the same time.
 * **Set key** gives it a global hotkey, with the same rules as the avatar hotkeys.
-* **Settings** holds the action's **Cooldown** and its own sliders and checkboxes, when it has any. They are saved with your avatar file.
+* **Settings** shows the action's own sliders and checkboxes, when it has any, and its **Cooldown**. They are saved with your avatar file.
 * **Cooldown** is how many seconds Streamer.bot has to wait before it can play the action again, so chat can't spam it. Test and your own hotkeys always play. 0 means no cooldown.
 
 **Actions that stay on.** Some actions are *held*: they stay on until you turn them off, like a "be right back" pose. Their button says **▶ Turn on** and then **■ Turn off**, and their hotkey switches them the same way. **■ Stop all actions** stops everything that is playing.
