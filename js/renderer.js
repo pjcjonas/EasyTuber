@@ -173,7 +173,7 @@
       const now = performance.now();
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      for (const id of project.order) {
+      for (const id of opts.order || project.order) {   // opts.order: an action changed the stacking
         const p = project.parts[id];
         if (!p.visible) continue;
         const def = PT.PART[id];

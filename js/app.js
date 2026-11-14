@@ -620,6 +620,7 @@
       R.drawRigFx(p, pose, editing ? this.previewStates : showAct ? { ...liveStates, ...act.states } : liveStates, {
         dimPlaceholders: editing,
         onionPart: editing && p.stage.onion ? this.selected : null,
+        order: showAct ? PT.Actions.drawOrder(p.order) : null,
         fx: switching || actFx
           ? (id, t) => PT.Actions.combineFx(switching ? PT.Transition.fx(id, t) : null, actFx ? PT.Actions.partFx(id) : null)
           : null,
