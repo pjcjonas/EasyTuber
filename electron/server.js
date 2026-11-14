@@ -12,6 +12,9 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.mp4': 'video/mp4',
+  // pictures and sounds for actions
+  '.webp': 'image/webp', '.gif': 'image/gif', '.webm': 'video/webm',
+  '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4',
 };
 const STATIC_DIRS = ['css', 'js', 'build', 'media'];
 const USER_ACTIONS = 'user-actions';          // URL folder for the user's actions folder

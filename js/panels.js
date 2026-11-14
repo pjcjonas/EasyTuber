@@ -650,6 +650,21 @@
         settings.length ? el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), ...settings) : null);
     },
 
+    // where action sounds play (each sound must be heard once), and how loud
+    actionSounds() {
+      const st = this.project.stage, app = this.app;
+      const where = el('select', { 'aria-label': 'Where action sounds play' },
+        el('option', { value: 'editor' }, 'In EASY-TUBER (this window)'),
+        el('option', { value: 'obs' }, 'In the OBS source or stage window'),
+        el('option', { value: 'off' }, 'Nowhere (muted)'));
+      where.value = ['editor', 'obs', 'off'].includes(st.actionSound) ? st.actionSound : 'editor';
+      where.addEventListener('change', () => { st.actionSound = where.value; app.changed({ settings: true }); });
+      return this.section('Sounds',
+        el('div', { class: 'field' }, el('label', {}, 'Play action sounds'), where),
+        this.field('Volume', { min: 0, max: 100, step: 1, suffix: '%', get: () => st.actionVolume, set: (v) => { st.actionVolume = PT.clamp(v, 0, 100); app.changed({ settings: true }); } }),
+        this.note('Sounds only matter for actions that have them. "In EASY-TUBER" plays through your speakers, so your stream hears them with your desktop sound. "In the OBS source" plays inside OBS: tick "Control audio via OBS" on the Browser Source to mix it there.'));
+    },
+
     // Streamer.bot: one step or a sequence, as a URL for a Fetch URL sub-action
     streamerBot(defs) {
       const p = this.project;
@@ -787,6 +802,7 @@
           ...skipped.map((f) => el('p', { class: 'note warn-text' }, `${f.src.split('/').pop()} was skipped: ${f.message}`)),
           server ? folder : null,
           server ? this.note('Only add action files you trust: an action is a small program that runs inside EASY-TUBER.') : null),
+        this.actionSounds(),
         server ? this.streamerBot(defs)
           : this.section('Streamer.bot', this.note('Hotkeys and Streamer.bot work in the EASY-TUBER desktop app.')),
       );

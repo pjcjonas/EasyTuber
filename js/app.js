@@ -31,6 +31,7 @@
       // ?cam=1: the hidden stage page the desktop app films for the virtual camera
       this.camMode = this.stageMode && new URLSearchParams(location.search).has('cam');
       this.renderer.camMode = this.camMode;
+      PT.Actions.page = this.camMode ? 'cam' : this.stageMode ? 'stage' : 'editor';   // who plays action sounds
       this.animator = new PT.Animator();
       this.save = PT.debounce(() => PT.Storage.save(this.project), 500);
       // first run with the file server: copy the avatar from this browser into the file OBS reads
