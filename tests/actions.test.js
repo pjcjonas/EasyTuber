@@ -468,3 +468,102 @@ test('/api/streamerbot passes the values on with the action, and to every action
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(sse.events.length, 5);
 });
+
+/* ---------------- action sounds ---------------- */
+
+// stand-in for the page's Audio: remembers what was asked of it
+function fakeAudio(PT) {
+  const made = [];
+  PT.Actions.makeAudio = (src) => {
+    const a = { src, volume: 1, playing: false, play() { this.playing = true; return Promise.resolve(); }, pause() { this.playing = false; } };
+    made.push(a);
+    return a;
+  };
+  return made;
+}
+
+test('a.sound plays once per run, at the action\'s volume times the master volume', () => {
+  const PT = loadPT();
+  const made = fakeAudio(PT);
+  const results = [];
+  PT.Actions.define({ id: 'ding', duration: 1000, pose(a) { results.push(a.sound('user-actions/ding/ding.wav', { volume: 0.5 })); return null; } });
+  const p = PT.normalizeProject({ parts: {}, stage: { actionVolume: 50 } });
+  assert.equal(p.stage.actionSound, 'editor');
+
+  PT.Actions.play('ding', { n: 'a' }, p, 0);
+  PT.Actions.update(10, p); PT.Actions.update(20, p); PT.Actions.update(30, p);
+  assert.equal(made.length, 1);                       // called every frame, started once
+  assert.deepEqual(results, [true, true, true]);
+  assert.equal(made[0].src, 'user-actions/ding/ding.wav');
+  assert.equal(made[0].volume, 0.25);
+  assert.equal(made[0].playing, true);
+
+  // the action ends on its own: the sound is left to finish
+  PT.Actions.update(1500, p);
+  assert.equal(PT.Actions.active, false);
+  assert.equal(made[0].playing, true);
+
+  // played again while running: the old sound is cut, a new one starts
+  PT.Actions.play('ding', { n: 'b' }, p, 2000); PT.Actions.update(2010, p);
+  PT.Actions.play('ding', { n: 'c' }, p, 2100); PT.Actions.update(2110, p);
+  assert.equal(made.length, 3);
+  assert.equal(made[1].playing, false);
+  assert.equal(made[2].playing, true);
+  PT.Actions.stop('ding');
+  assert.equal(made[2].playing, false);
+
+  // nonsense is ignored, and a bad volume is kept in range
+  PT.Actions.define({ id: 'odd', duration: 1000, start(a) { a.sound(''); a.sound(null); a.sound('x.wav', { volume: 9 }); } });
+  PT.Actions.play('odd', {}, p, 0);
+  assert.equal(made.length, 4);
+  assert.equal(made[3].volume, 0.5);
+});
+
+test('each sound is heard once: the setting picks the editor or the stage pages, never the camera page', () => {
+  const plays = (page, where) => {
+    const PT = loadPT();
+    const made = fakeAudio(PT);
+    PT.Actions.page = page;
+    PT.Actions.define({ id: 'ding', duration: 1000, start(a) { a.sound('ding.wav'); } });
+    PT.Actions.play('ding', {}, PT.normalizeProject({ parts: {}, stage: { actionSound: where } }), 0);
+    return made.length;
+  };
+  assert.deepEqual(['editor', 'obs', 'off', 'junk'].map((w) => plays('editor', w)), [1, 0, 0, 1]);
+  assert.deepEqual(['editor', 'obs', 'off', 'junk'].map((w) => plays('stage', w)), [0, 1, 0, 0]);
+  assert.deepEqual(['editor', 'obs', 'off', 'junk'].map((w) => plays('cam', w)), [0, 0, 0, 0]);
+});
+
+test('a sound that cannot start does not stop the action', () => {
+  const PT = loadPT();
+  PT.Actions.makeAudio = () => { throw new Error('no audio here'); };
+  let failed = null;
+  PT.Actions.onError = (def, e) => { failed = e; };
+  PT.Actions.define({ id: 'ding', duration: 1000, pose(a) { a.sound('ding.wav'); return { face: { rot: 5 } }; } });
+  const p = PT.normalizeProject({ parts: {} });
+  PT.Actions.play('ding', {}, p, 0);
+  const out = PT.Actions.update(10, p);
+  assert.equal(out.deltas.face.rot, 5);
+  assert.equal(failed, null);
+});
+
+test('the server sends sounds and pictures with their types', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'easytuber-test-'));
+  const actionsDir = path.join(dir, 'actions');
+  fs.mkdirSync(path.join(actionsDir, 'ding'), { recursive: true });
+  const types = { 'a.wav': 'audio/wav', 'a.mp3': 'audio/mpeg', 'a.ogg': 'audio/ogg', 'a.m4a': 'audio/mp4', 'a.webp': 'image/webp', 'a.gif': 'image/gif', 'a.webm': 'video/webm', 'a.png': 'image/png' };
+  for (const name of Object.keys(types)) fs.writeFileSync(path.join(actionsDir, 'ding', name), '0123456789');
+  const srv = await start({ root: ROOT, saveFile: path.join(dir, 'avatar.json'), port: 18860, actionsDir });
+  t.after(() => { srv.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+  const head = (p, headers = {}) => new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port: srv.port, path: p, headers }, (res) => { res.resume(); res.on('end', () => resolve(res)); }).on('error', reject);
+  });
+  for (const [name, type] of Object.entries(types)) {
+    const res = await head('/user-actions/ding/' + name);
+    assert.equal(res.statusCode, 200, name);
+    assert.equal(res.headers['content-type'], type, name);
+  }
+  // a player asks for part of a sound file
+  const part = await head('/user-actions/ding/a.wav', { Range: 'bytes=2-5' });
+  assert.equal(part.statusCode, 206);
+  assert.equal(part.headers['content-range'], 'bytes 2-5/10');
+});

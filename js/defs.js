@@ -91,6 +91,8 @@
     skeleton: true,
     moveChildren: true,
     onion: true,        // show the first frame faintly while lining up another
+    actionSound: 'editor',  // where action sounds play: editor | obs (the stage pages) | off
+    actionVolume: 100,      // 0..100, for every action sound
   };
 
   PT.BG_COLORS = { green: '#00ff00', blue: '#0000ff', magenta: '#ff00ff' };

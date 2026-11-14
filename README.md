@@ -272,6 +272,12 @@ Only add action files you trust. An action is a small program that runs inside E
 * **Set key** gives it a global hotkey, with the same rules as the avatar hotkeys.
 * **Settings** (when the action has any) are its own sliders and checkboxes. They are saved with your avatar file.
 
+**Sounds.** Some actions come with sounds. Under **Sounds** in the Actions tab, choose where they play, and set one volume for all of them:
+
+* **In EASY-TUBER (this window)** plays through your speakers. Your stream hears it if you capture desktop sound, and so do you.
+* **In the OBS source or stage window** plays inside OBS. On the Browser Source, tick **Control audio via OBS** to give the sounds their own slider in the mixer.
+* **Nowhere (muted)** turns them off.
+
 **Play it from Streamer.bot**
 
 1. Under **Streamer.bot** in the Actions tab, pick an action. To play several in a row, pick each one and click **Add to sequence** (up to 8 steps, and avatar switches can be steps too).

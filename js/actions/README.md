@@ -64,6 +64,7 @@ PT.Actions.define({
 | `a.args` | the values this play came with, from the Streamer.bot URL: `…?action=wave&user=Bob&amount=500` gives `a.args.user === 'Bob'` and `a.args.amount === '500'`. Every value is text, so use `Number(a.args.amount)` for a number. It is an empty object when there are none (Test, a hotkey), so give each value a fallback: `a.args.user \|\| 'someone'`. |
 | `a.at(partId, u, v)` | where a point on a part is right now, in stage units. `u, v` are 0..1 across the part's image, so `a.at('armRLower', 0.5, 1)` is the bottom of the right forearm (the hand) |
 | `a.image(src)` | a cached picture, for example `a.image('media/actions/wave/sparkle.png')`. It is `null` until it has loaded. |
+| `a.sound(src, { volume })` | plays a sound, for example `a.sound('user-actions/wave/whoosh.mp3')`. `volume` is 0 to 1. It starts once per run however often you call it, so you can call it from `pose()` when the moment comes: `if (a.t > 0.5) a.sound(…)`. |
 | `a.project` | the whole project (read only) |
 
 ### The hooks
@@ -94,6 +95,14 @@ Put files for an action in a folder named after it, next to its file:
 - Built into the app: `media/actions/<id>/sparkle.png`, used as `a.image('media/actions/<id>/sparkle.png')`. That folder is packed into the app.
 
 Both are served to OBS.
+
+Pictures can be PNG, JPEG, WebP, GIF or SVG. Sounds can be MP3, WAV, OGG or M4A.
+
+**Sounds.** Every page runs every action, but a sound should be heard once. The **Sounds** section of the Actions tab chooses where action sounds play: in EASY-TUBER (the default), in the OBS source or stage window, or nowhere. It also has one volume for all of them. So call `a.sound()` without checking which page you are on.
+
+- A sound longer than the action plays to its end.
+- Playing the action again while it runs, or stopping it, cuts the sound.
+- If a sound can't be played, the action carries on without it. The reason is in the console (F12).
 
 ## How a play travels
 

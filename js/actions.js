@@ -71,6 +71,8 @@
     seen: [],               // nonces already played (a play can arrive by two routes)
     pose: null, view: null, // this frame's pose, for a.at()
     onError: null,          // (def, error) -> void, set by the editor to show a toast
+    page: 'editor',         // which page this is: editor | stage | cam (set by app.js; decides who plays sounds)
+    makeAudio: (src) => new Audio(src),
 
     /* ---------- defining ---------- */
     define(def) {
@@ -144,6 +146,40 @@
       return e.img;
     },
 
+    /* ---------- sounds ----------
+       Every page runs every action, but a sound must be heard once: the Actions tab says whether the
+       editor or the stage pages (OBS) play it. The virtual camera's hidden page never does. */
+    soundHere(project) {
+      const where = project && project.stage ? project.stage.actionSound : 'editor';
+      if (this.page === 'editor') return where !== 'obs' && where !== 'off';
+      return this.page === 'stage' && where === 'obs';
+    },
+    /* a.sound(): start a sound, once per run however often it is called. true = it plays on this page */
+    playSound(run, src, opts, project) {
+      if (typeof src !== 'string' || !src) return false;
+      run.sounds = run.sounds || new Map();
+      if (run.sounds.has(src)) return !!run.sounds.get(src);
+      run.sounds.set(src, null);
+      if (!this.soundHere(project)) return false;
+      const own = opts && Number.isFinite(opts.volume) ? opts.volume : 1;
+      const all = project && project.stage && Number.isFinite(project.stage.actionVolume) ? project.stage.actionVolume / 100 : 1;
+      try {
+        const audio = this.makeAudio(src);
+        audio.volume = clamp01(own) * clamp01(all);
+        const started = audio.play();
+        if (started && started.catch) started.catch((e) => console.warn(`Action sound ${src} did not play: ${e.message}`));
+        run.sounds.set(src, audio);
+        return true;
+      } catch (e) {
+        console.warn(`Action sound ${src} did not play: ${e.message}`);
+        return false;
+      }
+    },
+    // cut a run's sounds short (the action was stopped or started again)
+    silence(run) {
+      for (const audio of run.sounds ? run.sounds.values() : []) { try { if (audio) audio.pause(); } catch (e) { /* already gone */ } }
+    },
+
     /* ---------- playing ---------- */
     newPlay(id, args = null) {
       const msg = { type: 'action', id, n: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), seed: (Math.random() * 4294967296) >>> 0 };
@@ -162,7 +198,10 @@
         if (this.seen.length > 50) this.seen.shift();
       }
       // a second play of the same action restarts it, unless it allows copies to overlap
-      if (!def.overlap) this.running = this.running.filter((r) => r.def !== def);
+      if (!def.overlap) {
+        for (const r of this.running) if (r.def === def) this.silence(r);
+        this.running = this.running.filter((r) => r.def !== def);
+      }
       const seed = Number.isFinite(msg.seed) ? msg.seed : (Math.random() * 4294967296) >>> 0;
       const run = { def, t0: now, n: msg.n || null, seed, args: cleanArgs(msg.args), settings: this.settingsFor(project, def), state: {}, random: mulberry32(seed) };
       this.running.push(run);
@@ -171,7 +210,7 @@
     },
 
     stop(id) {
-      for (const r of this.running) if (!id || r.def.id === id) this.call(r, 'end', performance.now());
+      for (const r of this.running) if (!id || r.def.id === id) { this.silence(r); this.call(r, 'end', performance.now()); }
       this.running = id ? this.running.filter((r) => r.def.id !== id) : [];
     },
 
@@ -195,6 +234,8 @@
         // where a point on a part is right now, in stage units. u, v = 0..1 across the part's image
         at(partId, u = 0.5, v = 0.5) { return self.partPoint(partId, u, v); },
         image: (src) => self.image(src),
+        // play a sound once in this run; a sound longer than the action plays to its end
+        sound: (src, opts) => self.playSound(run, src, opts, project || (PT.App && PT.App.project)),
       };
     },
 

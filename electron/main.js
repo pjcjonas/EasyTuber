@@ -154,7 +154,8 @@ app.on('web-contents-created', (_e, wc) => {
         action: 'allow',
         overrideBrowserWindowOptions: {
           width: 960, height: 540, useContentSize: true, title: 'EASY-TUBER Stage', icon: ICON, backgroundColor: '#000000', autoHideMenuBar: true,
-          webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false },
+          // action sounds can be set to play here, and nobody clicks in this window first
+          webPreferences: { contextIsolation: true, sandbox: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
         },
       };
     }
