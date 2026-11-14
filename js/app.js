@@ -138,8 +138,9 @@
       };
       $('btnReset').onclick = async () => {
         if (!confirm('Remove all avatars and uploaded images, and reset every setting?')) return;
+        const kept = await this.backupNow('reset');
         await this.loadProject(PT.defaultProject());
-        PT.toast('Reset to the placeholder character.');
+        PT.toast(kept ? 'Reset to the placeholder character. The avatar you had is under Stage → Backups.' : 'Reset to the placeholder character.', '', kept ? 7000 : undefined);
       };
 
       // bulk drop zone
@@ -192,6 +193,30 @@
       if (!window.isSecureContext) {
         PT.toast('Microphone needs a secure page. Close this tab, run start.bat and use the localhost address it opens.', 'warn', 10000);
       }
+    },
+
+    /* Keep a backup of the avatar as it is right now, before something replaces it.
+       True if the avatar is safe in a backup (a new one, or one that already held exactly this). */
+    async backupNow(reason) {
+      if (!PT.Storage.server) return false;
+      try {
+        await PT.Storage.save(this.project);   // what is on screen, not what was saved half a second ago
+        await PT.Storage.settled();
+        await PT.Storage.makeBackup(reason);
+        return true;
+      } catch (e) { console.warn(e); return false; }
+    },
+
+    async restoreBackup(id) {
+      try {
+        const data = await PT.Storage.readBackup(id);
+        if (!data || !data.parts) throw new Error('it is not an avatar file');
+        const missing = await PT.Storage.missingPictures(data);
+        await this.backupNow('restore');
+        await this.loadProject(PT.normalizeProject(data));
+        if (missing) PT.toast(`Backup restored, but ${missing} of its pictures are no longer in the images folder.`, 'warn', 9000);
+        else PT.toast('Backup restored. The avatar you had before is in the list too.', '', 6000);
+      } catch (e) { PT.toast('Could not restore the backup: ' + e.message, 'error', 8000); }
     },
 
     async loadProject(p) {

@@ -263,6 +263,28 @@
       return wrap;
     },
 
+    // The backups the app keeps of the avatar file, each with a Restore button
+    backupList() {
+      const wrap = el('div', {}, this.note('Looking…'));
+      const why = { start: 'when the app started', reset: 'before a reset', restore: 'before a restore' };
+      const when = (at) => new Date(at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+      PT.Storage.backups().then((list) => {
+        wrap.innerHTML = '';
+        if (!list.length) wrap.append(this.note('None yet. One is made each time the app starts, and before a reset.'));
+        for (const b of list) {
+          wrap.append(el('div', { class: 'sheet-row', 'data-backup': b.id },
+            el('span', { class: 'sheet-row-name' }, when(b.at)),
+            el('span', { class: 'part-sub' }, why[b.reason] || b.reason),
+            el('button', {
+              class: 'btn small', title: 'Go back to the avatar as it was then',
+              onclick: () => { if (confirm(`Go back to the avatar from ${when(b.at)}? The avatar you have now is kept as a backup.`)) this.app.restoreBackup(b.id); },
+            }, 'Restore')));
+        }
+        if (list.length) wrap.append(this.note('The newest 5 are kept. They hold every avatar and setting; "Save file" makes a copy you keep yourself.'));
+      }).catch((e) => { wrap.innerHTML = ''; wrap.append(this.note('Could not read the backups: ' + e.message)); });
+      return wrap;
+    },
+
     // Per-frame offset/scale for multi-state parts, so frames from a sheet line up with each other
     frameAdjust(id) {
       const def = PT.PART[id], p = this.project.parts[id], app = this.app;
@@ -493,6 +515,7 @@
           el('li', {}, 'Leave Background on Transparent: no chroma key needed.'),
           el('li', {}, 'Keep EASY-TUBER open with the mic on. It can be minimized.')),
           this.note('Or use Window Capture: pick Green screen, click "Open stage window" and capture "EASY-TUBER Stage" with a Chroma Key filter.')),
+        PT.Storage.server ? this.section('Backups', this.backupList()) : '',
       );
       const camera = this.cameraBox();
       if (camera) host.firstChild.after(camera);   // under Background, which it uses
