@@ -90,39 +90,80 @@
         el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, 'Whole character'), el('div', { class: 'part-sub' }, 'Move / scale everything')));
       host.append(rootRow);
 
-      let group = null;
-      for (const def of PT.PARTS) {
-        if (def.group !== group) { group = def.group; host.append(el('div', { class: 'group-title' }, group)); }
-        const p = this.project.parts[def.id];
-        const user = PT.Assets.user[def.id] || {};
-        const count = def.states.filter((s) => user[s]).length;
-        const sub = count === 0 ? (Object.keys(user).length ? 'only in expressions' : def.custom ? 'empty' : 'empty, using placeholder')
-          : def.states.length > 1 ? `${count}/${def.states.length} images` : 'uploaded';
-
-        const eye = el('button', {
-          class: 'icon-btn' + (p.visible ? '' : ' off'), title: p.visible ? 'Hide' : 'Show',
-          onclick: (e) => { e.stopPropagation(); PT.Editor.pushUndo(true); p.visible = !p.visible; app.changed({ structure: true }); },
-        }, p.visible ? '👁' : '—');
-
-        const row = el('div', {
-          class: 'part-row' + (app.selected === def.id ? ' selected' : ''),
-          title: 'Click to select. Drop an image here to upload.',
-          onclick: () => app.select(def.id),
-        },
-          this.thumbFor(def.id),
-          el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, def.label), el('div', { class: 'part-sub' + (count ? ' ok' : '') }, sub)),
-          eye);
-        this.makeDroppable(row, (files) => PT.Editor.importFiles(files, { part: def.id }));
-        host.append(row);
+      // the built-in parts by group, then each section of your own parts (always shown), then the rest
+      const sections = [
+        ...[...new Set(PT.BASE_PARTS.map((d) => d.group))].map((g) => ({ title: g, parts: PT.PARTS.filter((d) => !d.custom && d.group === g) })),
+        ...PT.PART_SECTIONS.map((s) => ({ title: s.label, section: s, parts: PT.PARTS.filter((d) => d.custom && d.section === s.id) })),
+        { title: 'Your parts', own: true, parts: PT.PARTS.filter((d) => d.custom && !d.section) },
+      ];
+      for (const sec of sections) {
+        host.append(el('div', { class: 'group-title' + (sec.section ? ' section-title' : '') }, sec.title));
+        if (sec.section && !sec.parts.length) host.append(el('p', { class: 'note part-empty' }, `No ${sec.section.item} yet.`));
+        for (const def of sec.parts) this.partRow(host, def, sec.section);
+        if (sec.section) host.append(this.sectionAdd(sec.section));
       }
-      // your own parts: a hat, a tail, a prop, a hand of its own
-      if (group !== 'Your parts') host.append(el('div', { class: 'group-title' }, 'Your parts'));
       host.append(el('div', { class: 'row', style: { margin: '6px 8px 10px' } },
         el('button', {
-          class: 'btn', title: 'Add a part of your own to the skeleton: a hat, glasses, a tail, a prop…',
+          class: 'btn', title: 'Add a part of your own to the skeleton: a tail, a prop, a hand of its own…',
           disabled: this.project.customParts.length >= PT.MAX_CUSTOM_PARTS,
           onclick: () => { if (app.addPart()) PT.toast('Part added. Name it, choose what it is attached to, then give it an image.', '', 6000); },
         }, '＋ Add part')));
+    },
+
+    // one row of the part list; in a section it also has a remove button
+    partRow(host, def, section) {
+      const app = this.app;
+      const p = this.project.parts[def.id];
+      const user = PT.Assets.user[def.id] || {};
+      const count = def.states.filter((s) => user[s]).length;
+      const sub = count === 0 ? (Object.keys(user).length ? 'only in expressions' : def.custom ? 'empty' : 'empty, using placeholder')
+        : def.states.length > 1 ? `${count}/${def.states.length} images` : 'uploaded';
+
+      const eye = el('button', {
+        class: 'icon-btn' + (p.visible ? '' : ' off'), title: p.visible ? 'Hide' : 'Show',
+        onclick: (e) => { e.stopPropagation(); PT.Editor.pushUndo(true); p.visible = !p.visible; app.changed({ structure: true }); },
+      }, p.visible ? '👁' : '—');
+
+      const row = el('div', {
+        class: 'part-row' + (app.selected === def.id ? ' selected' : ''),
+        title: 'Click to select. Drop an image here to upload.',
+        onclick: () => app.select(def.id),
+      },
+        this.thumbFor(def.id),
+        el('div', { class: 'part-meta' }, el('div', { class: 'part-name' }, def.label), el('div', { class: 'part-sub' + (count ? ' ok' : '') }, sub)),
+        eye);
+      if (section) row.append(el('button', {
+        class: 'icon-btn', title: `Remove this ${section.item} (from every skin and avatar)`,
+        onclick: (e) => { e.stopPropagation(); if (confirm(`Remove "${def.label}" from every skin and avatar?`)) app.removePart(def.id); },
+      }, '🗑'));
+      this.makeDroppable(row, (files) => PT.Editor.importFiles(files, { part: def.id }));
+      host.append(row);
+    },
+
+    /* A section's "+ Add" button, and the tray it opens: every picture in your library and
+       accessories, each adding a new item of the section wearing it; or upload new ones. */
+    sectionAdd(sec) {
+      const app = this.app, L = PT.Library, X = PT.Accessories, open = this.sectionOpen === sec.id;
+      const wrap = el('div', { class: 'section-add' },
+        el('button', {
+          class: 'btn' + (open ? ' on' : ''), disabled: this.project.customParts.length >= PT.MAX_CUSTOM_PARTS,
+          title: `Add ${sec.item} from your library, or upload new`,
+          onclick: () => { this.sectionOpen = open ? null : sec.id; this.renderPartList(); },
+        }, open ? 'Done' : `＋ Add ${sec.item}`));
+      if (!open) return wrap;
+      const items = [...X.list(), ...L.parts()].filter((x) => (x.kind === 'accessory' ? X.picture(x) : L.cover(x.images, x.part)));
+      const add = async (x) => { const id = await app.addSectionItem(sec.id, x); if (id) PT.toast(`Added "${PT.PART[id].label}" to ${sec.label}. Move it into place in Edit mode.`, '', 5000); };
+      const fileIn = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      const upload = async (files) => { for (const x of await X.upload(files)) await add(x); };
+      fileIn.addEventListener('change', async () => { const f = Array.from(fileIn.files); fileIn.value = ''; await upload(f); });
+      const tray = el('div', { class: 'lib-grid section-tray' },
+        el('button', { class: 'lib-tile upload', title: `Upload new ${sec.item}: it is kept with your accessories`, onclick: () => fileIn.click() },
+          el('span', { class: 'lib-pic' }, '＋'), el('span', { class: 'lib-cap' }, 'Upload…')),
+        ...items.map((x) => this.tile(x.kind === 'accessory' ? X.picture(x) : L.cover(x.images, x.part), x.name, `Add "${x.name}" as ${sec.item}`, () => add(x),
+          el('span', { class: 'lib-other' }, x.kind === 'accessory' ? 'Accessory' : 'Library'))));
+      this.makeDroppable(tray, upload);
+      wrap.append(el('p', { class: 'note' }, `Click a picture to add it as ${sec.item} on the skin on screen. Add as many as you like; each one is a part of its own.`), tray, fileIn);
+      return wrap;
     },
 
     // Named faces: a row each with its name, Show / Turn off, hotkey, Streamer.bot address and Delete
@@ -353,8 +394,14 @@
       const parent = el('select', { 'aria-label': 'Attached to' }, ...choices.map((d) => el('option', { value: d.id }, PT.partName(d))));
       parent.value = def.parent;
       parent.addEventListener('change', () => app.updatePart(id, { parent: parent.value }));
+      const sectionSel = el('select', { 'aria-label': 'Listed under' },
+        ...PT.PART_SECTIONS.map((s) => el('option', { value: s.id }, s.label)), el('option', { value: '' }, 'Your parts'));
+      sectionSel.value = def.section || '';
+      sectionSel.addEventListener('change', () => app.updatePart(id, { section: sectionSel.value }));
       return this.section('This part',
         el('div', { class: 'row' }, name),
+        el('label', { class: 'note', style: { display: 'block', margin: '8px 0 4px' } }, 'Listed under'),
+        el('div', { class: 'row' }, sectionSel),
         el('label', { class: 'note', style: { display: 'block', margin: '8px 0 4px' } }, 'Attached to'),
         el('div', { class: 'row' }, parent),
         this.field('Sway', { min: 0, max: 200, suffix: '%', get: () => Math.round(PT.PART[id].sway * 100), set: (v) => app.updatePart(id, { sway: v / 100 }),

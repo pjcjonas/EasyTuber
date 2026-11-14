@@ -80,6 +80,15 @@
 
   // The valid custom parts in a list. A part may only hang from a built-in part or from a custom
   // part before it in the list, so parents always come first and there are no loops.
+  /* Sections of the part list for parts of your own, each always shown with its own Add button.
+     A custom part with section: '<id>' is listed there; without one it is under "Your parts".
+     To add a section later (eyewear, props…), add an entry here. */
+  PT.PART_SECTIONS = [
+    { id: 'headgear', label: 'Head gear', item: 'head gear', parent: 'face', sway: 0.3,
+      hint: 'Hats, caps, crowns, headphones, bows: anything worn on the head.' },
+  ];
+  PT.PART_SECTION = Object.fromEntries(PT.PART_SECTIONS.map((x) => [x.id, x]));
+
   PT.cleanCustomParts = (list) => {
     const out = [], ids = new Set(PT.BASE_PARTS.map((p) => p.id));
     for (const c of Array.isArray(list) ? list : []) {
@@ -90,6 +99,7 @@
         label: (typeof c.label === 'string' ? c.label.trim().slice(0, 40) : '') || 'Part',
         parent: ids.has(c.parent) ? c.parent : 'torso',
         sway: Number.isFinite(c.sway) ? Math.max(0, Math.min(2, c.sway)) : 1,
+        ...(PT.PART_SECTION && PT.PART_SECTION[c.section] ? { section: c.section } : {}),
       });
       ids.add(c.id);
     }
@@ -106,8 +116,9 @@
     for (const c of custom) {
       const parent = byId[c.parent];
       const def = {
-        id: c.id, label: c.label, group: 'Your parts', parent: c.parent, pivot: 'center', states: ['main'], custom: true, sway: c.sway,
-        hint: `Your own part. It moves with "${PT.partName(parent)}" and swings a little behind it.`,
+        id: c.id, label: c.label, group: c.section ? PT.PART_SECTION[c.section].label : 'Your parts', section: c.section || '',
+        parent: c.parent, pivot: 'center', states: ['main'], custom: true, sway: c.sway,
+        hint: `${c.section ? PT.PART_SECTION[c.section].label : 'Your own part'}. It moves with "${PT.partName(parent)}" and swings a little behind it.`,
       };
       parts.push(def); byId[c.id] = def;
       // starts at the joint of what it hangs from
@@ -118,7 +129,7 @@
     return custom;
   };
   // the custom parts of the skeleton as it is now
-  PT.customParts = () => PT.PARTS.filter((d) => d.custom).map((d) => ({ id: d.id, label: d.label, parent: d.parent, sway: d.sway }));
+  PT.customParts = () => PT.PARTS.filter((d) => d.custom).map((d) => ({ id: d.id, label: d.label, parent: d.parent, sway: d.sway, ...(d.section ? { section: d.section } : {}) }));
 
   /* Make a look fit the skeleton as it is now: a part it has no entry for gets a default one
      (a custom part at the joint of its parent), and parts that no longer exist are dropped. */
