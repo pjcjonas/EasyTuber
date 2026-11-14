@@ -27,6 +27,8 @@
       this.blinkSeq = null; this.blinkStep = 0; this.blinkTimer = 0;
       this.nextBlink = rnd(1.5, 4);
 
+      this.custom = {};   // custom part id -> { spring, prev }: follow-through for the user's own parts
+
       // mouth
       this.mouth = 'closed';
       this.lastLoud = -10; this.heldMouth = 'half'; this.mouthChanged = 0;
@@ -129,6 +131,22 @@
         out[s === 1 ? 'armLUpper' : 'armRUpper'] = { ox: 0, oy: 0, rot: s * upper, sx: 1, sy: 1 };
         // forearm bends inward (toward the body) as it gestures
         out[s === 1 ? 'armLLower' : 'armRLower'] = { ox: 0, oy: 0, rot: -s * fore, sx: 1, sy: 1 };
+      }
+
+      /* ---------- custom parts (follow-through, like the hair) ----------
+         A part swings behind whatever it hangs from: the faster that turns, the harder the push. */
+      const turn = {};   // part id -> how far it is turned in all, with everything above it
+      for (const def of PT.PARTS) {
+        const above = def.parent ? turn[def.parent] || 0 : 0;
+        if (def.custom) {
+          const c = this.custom[def.id] || (this.custom[def.id] = { spring: new Spring(90, 6), prev: above });
+          const vel = (above - c.prev) / Math.max(dt, 1e-3);
+          c.prev = above;
+          c.spring.v += -vel * 0.07 * def.sway * dt * 60;
+          const rot = def.sway > 0 ? clamp(c.spring.step(0, dt), -12, 12) : 0;
+          out[def.id] = { ox: 0, oy: 0, rot, sx: 1, sy: 1 };
+        }
+        turn[def.id] = above + (out[def.id] ? out[def.id].rot : 0);
       }
 
       return { deltas: out, states: { eyes: this.eyes, mouth: this.mouth }, vol: v, level };

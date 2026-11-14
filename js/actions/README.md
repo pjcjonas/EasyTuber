@@ -120,6 +120,7 @@ Turning it on and off:
 
 - The `L` arm is on the left of the screen and its pivot is the shoulder (upper arm) or the elbow (forearm).
 - `face` pivots at the chin.
+- Parts the user added (a hat, a tail…) have ids like `c_k3x9p2ab`. The Part tab shows the id of the selected part. They work everywhere a built-in id does: in what `pose()` returns, in `parts()` and in `a.at()`. `PT.PARTS.filter((d) => d.custom)` lists them, each with its `label` and `parent`. An id that isn't in the skeleton is ignored, so an action written for one user's hat does nothing for a user without it.
 - Positive `rot` turns clockwise.
 
 ### Pictures and sounds
