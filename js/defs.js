@@ -192,6 +192,7 @@
        every other avatar keeps its own look here. activeAvatar can also be 'random' (a random mix). */
     avatars: [{ id: 'a1', name: 'Avatar 1', hotkey: '', look: null }],
     activeAvatar: 'a1',
+    mix: null,                           // set while a mix is on screen (see normalizeProject)
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
     actions: {},                         // { [actionId]: { hotkey, settings: { key: value }, cooldown } }
@@ -239,6 +240,12 @@
     const randomOk = p.activeAvatar === 'random' && out.avatars.every((a) => a.look);
     out.activeAvatar = known || randomOk ? p.activeAvatar : (out.avatars.find((a) => !a.look) || out.avatars[0]).id;
     for (const a of out.avatars) if (a.id === out.activeAvatar) a.look = null;   // its look is the one above
+    // while a mix is on screen: which avatar each part group came from, { [first part of the group]: avatar id }
+    out.mix = null;
+    if (out.activeAvatar === 'random' && p.mix && typeof p.mix === 'object') {
+      out.mix = {};
+      for (const [k, v] of Object.entries(p.mix)) if (PT.PART[k] && typeof v === 'string' && out.avatars.some((a) => a.id === v)) out.mix[k] = v;
+    }
     out.hotkeys = { next: str((p.hotkeys || {}).next, 64), random: str((p.hotkeys || {}).random, 64) };
     out.switchFx = p.switchFx !== false;
     // per action (js/actions/*.js): its global hotkey and its settings. Shared by every avatar.
