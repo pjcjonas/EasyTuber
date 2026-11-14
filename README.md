@@ -130,7 +130,7 @@ Draw your character in your art program as separate layers and export each layer
 | Neck | `neck.png` |
 | Face | `face.png`, `head.png` |
 | Eyes | `eyes_open.png`, `eyes_half.png`, `eyes_closed.png` (`blink` works too) |
-| Mouth | `mouth_closed.png`, `mouth_half.png`, `mouth_open.png` |
+| Mouth | `mouth_closed.png`, `mouth_half.png`, `mouth_open.png`; optional `mouth_ah.png`, `mouth_oh.png`, `mouth_ee.png` |
 | Hair | `hair_front.png` (or `bangs`), `hair_back.png` |
 | Arms | `arm_l_upper.png`, `arm_l_lower.png`, `arm_r_upper.png`, `arm_r_lower.png` (`forearm` or `hand` also mean lower) |
 
@@ -194,6 +194,7 @@ Eyes and mouth have several images each. Select **Eyes** or **Mouth** to see the
 
 * **Eyes:** *Open*, *Half* and *Closed*. Half is optional and makes blinks smoother.
 * **Mouth:** *Closed*, *Half* and *Open*. Half is optional; without it the open mouth is used for both.
+* **Vowel shapes (optional):** the mouth also has *Ah*, *Oh / Oo* and *Ee / Eh*. Give it any of these and, while you talk, the mouth takes the shape of the vowel you are saying; for a sound with no image it uses Half and Open as before. Dropped files named `mouth_ah.png`, `mouth_oh.png` and `mouth_ee.png` go to these slots. The app guesses the vowel from the pitch of your voice's strongest tones. It is a rough match that makes the mouth livelier, not exact lip-sync. Hold **Space** in Live to see the shapes without a microphone.
 * **Click a filled slot** to preview that state on the stage while you line it up.
 * **Frame adjust** (appears once you've uploaded frames) moves or scales only the frame you're previewing, so a slightly misaligned frame lines up. The first frame shows faintly underneath (onion skin). **Next frame →** steps through the frames so you can check them.
 

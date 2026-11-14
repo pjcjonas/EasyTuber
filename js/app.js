@@ -16,7 +16,8 @@
     lookOn: false,       // the desktop app has been asked to watch the pointer
     exprTemp: null,      // an expression shown for a while: { id, until } (see setExpression)
     editExpression: '',  // Edit mode: the expression whose images the Part tab is showing
-    remote: { v: 0, t: -1e9 },
+    remote: { v: 0, t: -1e9, vowel: '' },
+    vowelNow: '', vowelSeen: '', vowelSince: 0,   // the vowel shown, and the one heard lately (see steadyVowel)
     lastPose: null,
     lastAnim: null,
 
@@ -82,7 +83,7 @@
       }, 150);
       PT.Storage.onMessage((msg) => {
         if (msg.type === 'project-saved') reload();
-        else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.t = performance.now(); }
+        else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.vowel = typeof msg.vw === 'string' ? msg.vw : ''; this.remote.t = performance.now(); }
         else if (msg.type === 'blink') this.animator.blink();
         else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
@@ -121,7 +122,7 @@
       PT.Audio.onTick = (dt) => {
         if (performance.now() - this.last < 200) return;
         const v = PT.Audio.read(dt, this.project.mic.sensitivity);
-        PT.Storage.live({ type: 'level', v });
+        PT.Storage.live({ type: 'level', v, vw: PT.Assets.hasExtra('mouth') ? PT.Audio.vowel() : '' });
       };
       PT.Panels.init();
 
@@ -215,6 +216,15 @@
       if (!window.isSecureContext) {
         PT.toast('Microphone needs a secure page. Close this tab, run start.bat and use the localhost address it opens.', 'warn', 10000);
       }
+    },
+
+    /* The vowel to show: what is heard, once it has been heard for a moment, so the mouth
+       doesn't flicker between shapes within one syllable. */
+    steadyVowel(heard, now) {
+      if (heard !== this.vowelSeen) { this.vowelSeen = heard; this.vowelSince = now; }
+      if (heard === this.vowelNow) return this.vowelNow;
+      if (now - this.vowelSince >= (heard ? 70 : 140)) this.vowelNow = heard;
+      return this.vowelNow;
     },
 
     /* ---------------- expressions ---------------- */
@@ -580,8 +590,13 @@
       else if (this.stageMode && remoteFresh) level = this.remote.v;   // the editor's mic wins
       else if (ownMic) level = micLevel;
       this.level = level;
+      // the vowel being said, worked out only when the mouth has pictures for vowels
+      let heard = '';
+      if (this.stageMode && remoteFresh && !this.simTalk) heard = this.remote.vowel;
+      else if (PT.Assets.hasExtra('mouth')) heard = this.simTalk ? 'aoe'[Math.floor(t * 3) % 3] : ownMic ? PT.Audio.vowel() : '';
+      const vowel = this.steadyVowel(heard, now);
 
-      if (!this.stageMode && (ownMic || this.simTalk)) PT.Storage.live({ type: 'level', v: level });
+      if (!this.stageMode && (ownMic || this.simTalk)) PT.Storage.live({ type: 'level', v: level, vw: heard });
       if (this.stageMode) $('clickToStart').hidden = ownMic || remoteFresh || this.inOBS;
 
       const anim = this.animator.update(dt, level, p.motion, p.mic, this.look);
@@ -592,7 +607,7 @@
       const editing = !this.stageMode && this.mode === 'edit';
       const showAct = !!act && !editing;        // Edit mode shows the rest pose only
       this.previewStates.expression = this.editExpression;
-      const liveStates = { ...anim.states, expression: this.currentExpression(now) };
+      const liveStates = { ...anim.states, expression: this.currentExpression(now), vowel };
       const R = this.renderer;
       R.resize();
       const pose = R.computePose(p, editing ? null : showAct ? PT.Actions.mergeDeltas(anim.deltas, act.deltas) : anim.deltas);

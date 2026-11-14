@@ -1,7 +1,31 @@
-/* Microphone input -> a smoothed 0..1 loudness level. */
+/* Microphone input -> a smoothed 0..1 loudness level, and a rough guess at the vowel being said. */
 (function (PT) {
+  /* Which vowel shape a sound is nearest to, from how its energy is spread over three bands:
+       low  250-600 Hz    where "ee", "eh", "oh" and "oo" have their first (strongest) formant
+       mid  600-1400 Hz   where "ah" has its first two
+       high 1700-3400 Hz  where "ee" and "eh" have their second; "oh" and "oo" have next to nothing
+     So: more in mid than in low is 'a'; otherwise a real share up high is 'e'; otherwise 'o'.
+     '' when there is no sound to go by. The numbers come from typical formant positions, not from
+     measuring voices: it is a rough guide for a mouth picture, not speech recognition. */
+  PT.vowelFromBands = (low, mid, high) => {
+    const total = low + mid + high;
+    if (!(total > 0)) return '';
+    if (mid > low) return 'a';
+    if (high / total > 0.01) return 'e';   // within 20 dB of the rest
+    return 'o';
+  };
+  // the power in each band, from an analyser's frequency data in dB
+  PT.bandPowers = (db, sampleRate, fftSize) => {
+    const hz = sampleRate / fftSize, sum = (from, to) => {
+      let s = 0;
+      for (let i = Math.max(1, Math.round(from / hz)); i <= Math.min(db.length - 1, Math.round(to / hz)); i++) s += Math.pow(10, db[i] / 10);
+      return s;
+    };
+    return [sum(250, 600), sum(600, 1400), sum(1700, 3400)];
+  };
+
   PT.Audio = {
-    ctx: null, stream: null, analyser: null, buf: null,
+    ctx: null, stream: null, analyser: null, buf: null, freq: null,
     running: false, level: 0, raw: 0,
     onTick: null,
 
@@ -59,6 +83,15 @@
       this.stream = this.ctx = this.analyser = null;
       this.running = false;
       this.level = 0;
+    },
+
+    // the vowel being said right now: 'a', 'o', 'e' or '' (see PT.vowelFromBands)
+    vowel() {
+      if (!this.running || !this.analyser) return '';
+      if (!this.freq || this.freq.length !== this.analyser.frequencyBinCount) this.freq = new Float32Array(this.analyser.frequencyBinCount);
+      this.analyser.getFloatFrequencyData(this.freq);
+      const [low, mid, high] = PT.bandPowers(this.freq, this.ctx.sampleRate, this.analyser.fftSize);
+      return PT.vowelFromBands(low, mid, high);
     },
 
     // sensitivity 0..100 (50 = neutral). Returns 0..1

@@ -296,7 +296,7 @@
         picker.addEventListener('change', () => { app.editExpression = picker.value; this.renderInspector(); });
       }
       const slots = el('div', { class: 'slots' + (def.states.length === 1 ? ' single' : '') });
-      for (const state of def.states) {
+      for (const state of def.states.concat(def.extra || [])) {
         const st = PT.imageKey(state, expr);
         const entry = (PT.Assets.user[id] || {})[st];
         const previewing = def.states.length > 1 && (app.previewStates[id] || def.states[0]) === state;
@@ -333,6 +333,7 @@
           picker ? el('div', { class: 'row', style: { marginBottom: '8px' } }, picker) : null,
           slots,
           expr ? this.note(`These are shown while "${exprs.find((x) => x.id === expr).name}" is on. A slot left empty uses the normal image.`) : null,
+          def.extra ? this.note('Ah, Oh / Oo and Ee / Eh are optional. With them, the mouth takes the shape of the vowel you are saying; without them it uses Half and Open.') : null,
           def.states.length > 1 ? this.note('Click a filled slot to preview that state on the stage while editing.') : null,
           el('div', { class: 'row', style: { marginTop: '8px' } },
             el('button', {
