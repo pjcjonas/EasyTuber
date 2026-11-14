@@ -227,6 +227,8 @@ All the motion is built in. The **Motion** tab only sets how strong each one is 
 
 Click **Live** in the top bar (or press **Tab**). The skeleton disappears and the avatar breathes, blinks and talks. The status chips show what the mouth and eyes are doing.
 
+The avatar is drawn about 60 times a second, also on a 144 or 240 Hz screen, so the app leaves the processor to your game.
+
 ![Live mode, talking](docs/screenshots/live-talking.png)
 
 ---
@@ -308,7 +310,7 @@ EASY-TUBER serves your avatar on a local web address for OBS: `http://localhost:
 
 ### Browser Source (recommended: transparent, no chroma key)
 
-1. Keep EASY-TUBER open with **Start mic** on. It can be minimised.
+1. Keep EASY-TUBER open with **Start mic** on. It can be minimised: minimised it uses almost no processor time, and actions and their sounds still play on time.
 2. In OBS: **Sources → + → Browser**. Paste the address, set width **1920** and height **1080**.
 3. Leave the Stage background on **Transparent** (the checkerboard swatch).
 
