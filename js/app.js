@@ -327,11 +327,12 @@
       PT.Editor.resetHistory();
       this.changed({ structure: true });
     },
-    addPart(label = 'New part', parent = 'face') {
+    addPart(label = 'New part', parent = 'face', section = '') {
       const p = this.project;
       if (p.customParts.length >= PT.MAX_CUSTOM_PARTS) { PT.toast(`That is the most parts you can add (${PT.MAX_CUSTOM_PARTS}).`, 'warn'); return null; }
       const id = 'c_' + Math.random().toString(36).slice(2, 10).padEnd(4, '0');
-      p.customParts.push({ id, label, parent, sway: 1 });
+      const sec = PT.PART_SECTION[section];
+      p.customParts.push({ id, label, parent: sec ? sec.parent : parent, sway: sec ? sec.sway : 1, ...(sec ? { section } : {}) });
       this.rigChanged();
       if (!PT.PART[id]) return null;
       this.select(id);
@@ -342,9 +343,23 @@
       const c = this.project.customParts.find((x) => x.id === id);
       if (!c) return;
       Object.assign(c, change);
-      if ('label' in change || 'parent' in change) this.rigChanged();
+      if ('section' in change && !PT.PART_SECTION[change.section]) delete c.section;
+      if ('label' in change || 'parent' in change || 'section' in change) this.rigChanged();
       else { PT.PART[id].sway = PT.cleanCustomParts([c])[0].sway; c.sway = PT.PART[id].sway; this.changed({ settings: true }); }
     },
+    /* A new part in a section (head gear…) wearing a library picture, on the skin on screen.
+       item: a library entry (an accessory or a library part). Returns the new part id. */
+    async addSectionItem(section, item) {
+      const sec = PT.PART_SECTION[section];
+      if (!sec || !item) return null;
+      const id = this.addPart(item.name.slice(0, 40) || sec.label, sec.parent, section);
+      if (!id) return null;
+      const src = { ...item, images: item.kind === 'accessory' ? item.images : { main: PT.Library.cover(item.images, item.part) } };
+      await PT.Accessories.wear(src, this.project.activeAvatar, id);
+      this.select(id);
+      return id;
+    },
+
     // parts that hung from it now hang from what it hung from
     removePart(id) {
       const p = this.project, gone = p.customParts.find((x) => x.id === id);

@@ -220,3 +220,23 @@ test('a custom part swings behind its parent, unless its sway is 0', () => {
   PT.applyRig(null);
   assert.equal(anim.update(1 / 60, 0, p.motion, p.mic).deltas.c_hat, undefined);
 });
+
+test('head gear: a section of the part list for parts of your own', () => {
+  const PT = loadPT();
+  assert.equal(PT.PART_SECTIONS.map((x) => x.id).join(), 'headgear');
+  const out = plain(PT.cleanCustomParts([
+    { id: 'c_cap', label: 'Cap', parent: 'face', sway: 0.3, section: 'headgear' },
+    { id: 'c_tail', label: 'Tail', parent: 'torso', section: 'nonsense' },        // an unknown section: Your parts
+  ]));
+  assert.deepEqual(out, [
+    { id: 'c_cap', label: 'Cap', parent: 'face', sway: 0.3, section: 'headgear' },
+    { id: 'c_tail', label: 'Tail', parent: 'torso', sway: 1 },
+  ]);
+  PT.applyRig({ customParts: out });
+  assert.equal(PT.PART.c_cap.group, 'Head gear');
+  assert.equal(PT.PART.c_cap.section, 'headgear');
+  assert.equal(PT.PART.c_tail.group, 'Your parts');
+  assert.deepEqual(plain(PT.customParts()), out);                                 // kept as it was given
+  const p = PT.normalizeProject({ customParts: out });
+  assert.equal(p.customParts[0].section, 'headgear');
+});

@@ -155,6 +155,17 @@ Change any choice in the list, then click **Import**. Every image is made at the
 
 Layer effects, blend modes, masks and adjustment layers are not applied; flatten those into the layer first. Clip Studio Paint, Krita, GIMP and Procreate can all save `.psd`.
 
+### Head gear
+
+The part list has a **Head gear** section of its own, always there below the arms. It holds hats, caps, crowns, headphones, bows: anything worn on the head, as many as you like.
+
+* **＋ Add head gear** opens a tray with every picture in your parts library and accessories. Click one to add it as head gear on the skin on screen. Each one becomes a part of its own, attached to the face.
+* **Upload…** in the tray (or dropping pictures on it) adds new pictures: they are kept with your accessories and added as head gear straight away.
+* The **bin** on a head gear row removes it from every skin and avatar (its picture stays in your library).
+* Like any part of your own, head gear exists on every skin and avatar; each one can wear a different picture in it or leave it empty. In the **Part** tab, **Listed under** moves a part between **Head gear** and **Your parts**.
+
+More sections like this can be added later.
+
 ### Your own parts
 
 The skeleton has 11 parts. You can add your own: a hat, glasses, ears, a tail, a hand that is separate from the forearm, a prop.

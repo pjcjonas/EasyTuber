@@ -313,6 +313,15 @@ select {
 .box-num { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: #14121c; font-weight: 700; font-size: 11px; flex: none; }
 .box-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
 .box-nums label { font-size: 10px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+/* sections of your own parts in the part list (head gear…) */
+.group-title.section-title { border-left-color: var(--good); background: rgba(79, 209, 165, .08); }
+.part-empty { margin: 2px 8px 4px; font-size: 12px; color: var(--muted); }
+.section-add { margin: 4px 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.section-add > .btn { width: 100%; }
+.section-add .note { margin: 0; font-size: 12px; color: var(--muted); }
+.section-tray { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+.lib-tile.upload .lib-pic { font-size: 22px; color: var(--accent-2); background: var(--panel-2); }
+
 /* accessories */
 .acc-card { border: 1px solid var(--line); border-radius: 9px; padding: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); }
 .acc-top { display: flex; align-items: center; gap: 8px; }
