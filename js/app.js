@@ -125,6 +125,7 @@
         PT.Storage.live({ type: 'level', v, vw: PT.Assets.hasExtra('mouth') ? PT.Audio.vowel() : '' });
       };
       PT.Panels.init();
+      PT.Layout.init();
 
       $('modeEdit').onclick = () => this.setMode('edit');
       $('modeLive').onclick = () => this.setMode('live');
@@ -609,6 +610,7 @@
       this.previewStates.expression = this.editExpression;
       const liveStates = { ...anim.states, expression: this.currentExpression(now), vowel };
       const R = this.renderer;
+      if (!this.stageMode && PT.Layout) PT.Layout.measure();   // the panels may be sliding
       R.resize();
       const pose = R.computePose(p, editing ? null : showAct ? PT.Actions.mergeDeltas(anim.deltas, act.deltas) : anim.deltas);
       this.lastPose = pose;

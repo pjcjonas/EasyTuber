@@ -77,11 +77,14 @@
     }
 
     // character space -> canvas pixels
+    // In the editor the side panels float over the canvas: the stage is framed in the space between them.
     view() {
       const { width: w, height: h } = this.canvas;
       const pad = this.stageMode ? 0 : 28 * this.dpr;
-      const k = Math.max(0.01, Math.min((w - pad * 2) / PT.STAGE_W, (h - pad * 2) / PT.STAGE_H));
-      return M.mul(M.t((w - PT.STAGE_W * k) / 2, (h - PT.STAGE_H * k) / 2), M.s(k));
+      const L = !this.stageMode && PT.Layout ? PT.Layout.l * this.dpr : 0, R = !this.stageMode && PT.Layout ? PT.Layout.r * this.dpr : 0;
+      const free = Math.max(1, w - L - R);
+      const k = Math.max(0.01, Math.min((free - pad * 2) / PT.STAGE_W, (h - pad * 2) / PT.STAGE_H));
+      return M.mul(M.t(L + (free - PT.STAGE_W * k) / 2, (h - PT.STAGE_H * k) / 2), M.s(k));
     }
 
     // whole-character transform: character space -> stage, scaled around the character's

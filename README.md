@@ -88,9 +88,11 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 |---|---|
 | **Top bar** | **Edit / Live** switch, Undo / Redo, **Sprite sheet** cropper, **Open file / Save file**, **Reset**, and **Open stage window** |
 | **Left panel** | The drop box for all your layers, and the list of body parts. Click a part to select it; the eye icon hides or shows it |
-| **Centre** | The stage. The checkerboard square is the area OBS captures |
+| **Centre** | The stage, behind the two panels. The checkerboard area is what OBS captures |
 | **Bottom bar** | **Start mic**, the level meter with its **talk** and **open** markers, the mouth/eyes status, and **Hold to test talk** |
-| **Right panel** | Six tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars** and **Actions** |
+| **Right panel** | Six tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars** and **Actions**. Each tab is split into clearly marked sections |
+
+**The side panels float over the stage.** Click the small tab on a panel's inner edge (**‹** / **›**) to slide it away and give the stage the whole width; click it again to bring the panel back. Drag the right panel's inner edge to make it wider or narrower (double-click the edge for its usual width). The stage always frames the avatar in the space the panels leave free, and the app remembers how you left them.
 
 Until you upload your own art, every part shows a built-in placeholder character, so you can see the motion straight away.
 
@@ -531,6 +533,7 @@ js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, the user's own parts (applyRig), default layout and settings, filename routing
 js/psd.js           PSD import: layers to parts (the file is read by js/vendor/ag-psd.js, MIT)
 js/library.js       the parts library, and swapping a part for another avatar's or a library part
+js/layout.js        the side panels: floating over the stage, sliding away, resizing the right one
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
 js/transition.js    the drop-out / climb-in switch animation
