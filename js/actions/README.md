@@ -1,23 +1,33 @@
 # Actions: your own animations
 
-An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER ships with no actions. Each one you add is a single file in this folder.
+An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER ships with no actions. Each one you add is a single file.
 
 ## Adding one
 
-1. Create `js/actions/<id>.js` (the id is letters, digits, `-` or `_`, up to 40 characters).
-2. Add its script tag to `index.html`, between the two `actions` comments:
-   ```html
-   <!-- your actions: one file per action in js/actions/ (see js/actions/README.md) -->
-   <script src="js/actions/wave.js"></script>
-   <!-- end of actions -->
-   ```
-3. Restart the app (or reload the editor and the OBS source). The action shows up in the Actions tab.
+1. In the **Actions** tab, click **Open actions folder**.
+2. Put the action's file there, named `<id>.js` (the id is letters, digits, `-` or `_`, up to 40 characters).
+3. Click **Reload actions**. The action shows up in the Actions tab, and the stage window and OBS load it too.
+
+There is nothing else to edit. To remove an action, delete its file and reload.
+
+If a file has a mistake in it, it is skipped, and the Actions tab says which file and why. The other actions still load.
+
+Only add action files you trust. An action is a small program that runs inside EASY-TUBER.
+
+### Where the files live
+
+| | Folder | In the file, pictures and sounds are at |
+|---|---|---|
+| **Your actions folder** (the downloaded app, or from source) | Windows: `%APPDATA%\EASY-TUBER\actions` · Mac: `~/Library/Application Support/EASY-TUBER/actions` | `user-actions/<id>/…` |
+| **Built into the app** (working from source) | `js/actions/` in this repository | `media/actions/<id>/…` |
+
+Both are loaded when a page starts: `js/actions/` first, then your actions folder. If both have a file with the same id, yours is used.
 
 ## The file
 
 ```js
 PT.Actions.define({
-  id: 'wave',               // must match the file name
+  id: 'wave',               // the same as the file name: wave.js
   label: 'Wave',            // shown in the Actions tab and the Streamer.bot list
   duration: 1800,           // ms, 100 to 60000. Sequences wait this long before the next step.
   overlap: false,           // true: playing it again while it runs adds a second copy instead of restarting
@@ -77,13 +87,18 @@ If a hook throws, that action stops and the editor shows a toast. The avatar kee
 
 ### Pictures and sounds
 
-Put files for an action in `media/actions/<id>/`. That folder is served to OBS and packed into the app.
+Put files for an action in a folder named after it, next to its file:
+
+- In your actions folder: `actions/<id>/sparkle.png`, used as `a.image('user-actions/<id>/sparkle.png')`.
+- Built into the app: `media/actions/<id>/sparkle.png`, used as `a.image('media/actions/<id>/sparkle.png')`. That folder is packed into the app.
+
+Both are served to OBS.
 
 ## How a play travels
 
 ```
 Test button / hotkey / Streamer.bot URL
-  → server (electron/server.js)  checks the id against the editor's list, times sequences
+  → server (electron/server.js)  checks the id against the actions the editor loaded, times sequences
   → "live" event { type: 'action', id, n, seed } to every page
   → PT.Actions.play() in the editor, the stage window and OBS (n stops a double play)
 ```

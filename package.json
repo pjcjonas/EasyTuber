@@ -1,7 +1,7 @@
 {
   "name": "easy-tuber",
   "productName": "EASY-TUBER",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "EASY-TUBER: upload your body parts and get a PNGTuber that breathes, blinks and talks to your microphone.",
   "main": "electron/main.js",
   "private": true,

@@ -40,11 +40,12 @@ A narrated walkthrough (4:31): uploading your art, lining up the rig, eyes and m
 9. [Tune the motion](#9-tune-the-motion)
 10. [Watch it live](#10-watch-it-live)
 11. [Switch avatars with hotkeys](#11-switch-avatars-with-hotkeys)
-12. [Stream it with OBS](#12-stream-it-with-obs)
-13. [Save, back up and move your avatar](#13-save-back-up-and-move-your-avatar)
-14. [Shortcuts](#14-shortcuts)
-15. [Troubleshooting](#15-troubleshooting)
-16. [For developers](#16-for-developers)
+12. [Actions: your own animations](#12-actions-your-own-animations)
+13. [Stream it with OBS](#13-stream-it-with-obs)
+14. [Save, back up and move your avatar](#14-save-back-up-and-move-your-avatar)
+15. [Shortcuts](#15-shortcuts)
+16. [Troubleshooting](#16-troubleshooting)
+17. [For developers](#17-for-developers)
 
 ---
 
@@ -86,7 +87,7 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 | **Left panel** | The drop box for all your layers, and the list of body parts. Click a part to select it; the eye icon hides or shows it |
 | **Centre** | The stage. The checkerboard square is the area OBS captures |
 | **Bottom bar** | **Start mic**, the level meter with its **talk** and **open** markers, the mouth/eyes status, and **Hold to test talk** |
-| **Right panel** | Five tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage** and **Avatars** |
+| **Right panel** | Six tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars** and **Actions** |
 
 Until you upload your own art, every part shows a built-in placeholder character, so you can see the motion straight away.
 
@@ -251,7 +252,39 @@ Hotkeys work as long as EASY-TUBER is running, even minimised. While it runs, th
 
 ---
 
-## 12. Stream it with OBS
+## 12. Actions: your own animations
+
+An action is an animation you play on demand: a wave, a spin, a prop that flies in. EASY-TUBER comes with none. Each action is one small file, and you can add as many as you like, including ones somebody else made.
+
+**Add an action**
+
+1. Open the **Actions** tab and click **Open actions folder**.
+2. Put the action's `.js` file in that folder. If it came with a folder of pictures or sounds, put that folder there too.
+3. Click **Reload actions**. The action appears in the list, and the stage window and OBS load it as well.
+
+To remove an action, delete its file and click **Reload actions**. If a file has a mistake in it, it is skipped and the Actions tab tells you which file and why.
+
+Only add action files you trust. An action is a small program that runs inside EASY-TUBER.
+
+**Play an action**
+
+* **▶ Test** plays it in the editor, the stage window and OBS at the same time.
+* **Set key** gives it a global hotkey, with the same rules as the avatar hotkeys.
+* **Settings** (when the action has any) are its own sliders and checkboxes. They are saved with your avatar file.
+
+**Play it from Streamer.bot**
+
+1. Under **Streamer.bot** in the Actions tab, pick an action. To play several in a row, pick each one and click **Add to sequence** (up to 8 steps, and avatar switches can be steps too).
+2. Click **Copy** to copy the address.
+3. In Streamer.bot on the same computer, add a **Fetch URL** sub-action and paste the address. Add the header `X-EasyTuber-Control` with the value `streamerbot`.
+
+Keep EASY-TUBER running while you stream.
+
+**Write your own.** [js/actions/README.md](js/actions/README.md) describes the file: how to move parts, change the eyes and mouth, and draw in front of or behind the avatar.
+
+---
+
+## 13. Stream it with OBS
 
 EASY-TUBER serves your avatar on a local web address for OBS: `http://localhost:8777/?stage=1`. The **Stage** tab shows this address with a **Copy** button.
 
@@ -288,7 +321,7 @@ The **Stage** tab also has the editor options (placeholder art, joints and bones
 
 ---
 
-## 13. Save, back up and move your avatar
+## 14. Save, back up and move your avatar
 
 * **Your avatar saves itself** every time you change something, to:
   * Windows: `%APPDATA%\EASY-TUBER\avatar.easytuber.json`
@@ -301,7 +334,7 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 
 ---
 
-## 14. Shortcuts
+## 15. Shortcuts
 
 | Key | Action |
 |---|---|
@@ -316,12 +349,13 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 | **F5** | Reload |
 | **F12** | Developer tools |
 | *Your avatar hotkeys* | Switch avatar, next avatar, random mix (set in the Avatars tab; work in any program) |
+| *Your action hotkeys* | Play an action (set in the Actions tab; work in any program) |
 
 On a Mac, use **Cmd** where this says Ctrl.
 
 ---
 
-## 15. Troubleshooting
+## 16. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -338,7 +372,7 @@ On a Mac, use **Cmd** where this says Ctrl.
 
 ---
 
-## 16. For developers
+## 17. For developers
 
 **Run from source** (needs [Node.js](https://nodejs.org) 22 or later):
 
@@ -372,7 +406,7 @@ git push origin v1.0.1
 
 ```
 electron/main.js    desktop app window, mic permission, stage window
-electron/server.js  local server: serves the app to OBS, saves the avatar file, relays the mic
+electron/server.js  local server: serves the app to OBS, saves the avatar file, relays the mic, lists and plays actions
 electron/vcam.js    virtual camera: sends frames to the OBS Virtual Camera driver (Windows and macOS, through koffi)
 build/              logo, icons, the macOS microphone and camera permission text
 media/intro.mp4     the start-up intro
@@ -383,6 +417,8 @@ js/defs.js          parts, hierarchy, default layout and settings, filename rout
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
 js/transition.js    the drop-out / climb-in switch animation
+js/actions.js       loads and runs actions (your own animations)
+js/actions/         actions built into the app (none), and README.md: how to write one
 js/renderer.js      skeleton pose math + drawing
 js/editor.js        canvas editing, uploads/auto-alignment, mirroring, undo
 js/sheet.js         sprite sheet cropper
@@ -393,6 +429,6 @@ js/storage.js       avatar file + browser storage + messaging to the stage page
 js/placeholder.js   built-in placeholder character
 js/app.js           boot + main loop
 docs/screenshots/   the pictures in this README
-tests/              npm test (server and avatar logic)
+tests/              npm test (server, avatar, action and camera logic)
 docs/tutorial-thumbnail.jpg  the video tutorial's preview picture
 ```

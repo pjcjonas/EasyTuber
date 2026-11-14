@@ -733,6 +733,17 @@
       const defs = PT.Actions.list();
       const server = PT.Storage.server;
 
+      // the folder action files go in, and a reload for after adding or changing one
+      const folder = el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', { class: 'btn small', title: this.app.actionsFolder || '', onclick: async () => {
+          try { await PT.Storage.openActionsFolder(); } catch (e) { PT.toast('Could not open the folder: ' + e.message, 'error'); }
+        } }, 'Open actions folder'),
+        el('button', { class: 'btn small', title: 'Load the action files again: here, in the stage window and in OBS', onclick: () => {
+          PT.Storage.live({ type: 'reload-actions' });
+          setTimeout(() => location.reload(), 150);   // after the message has gone out
+        } }, 'Reload actions'));
+      const skipped = (this.app.actionLoad && this.app.actionLoad.failed) || [];
+
       host.innerHTML = '';
       host.append(
         this.section('Your actions',
@@ -740,8 +751,13 @@
             ? el('div', { class: 'avatar-list' }, ...defs.map((d) => this.actionRow(d)))
             : el('div', {},
               this.note('No actions yet. An action is an animation you made: a wave, a spin, a prop that flies in.'),
-              this.note('Each one is a file in js/actions/. See js/actions/README.md for how to write one.')),
-          defs.length ? this.note('Test switches the editor to Live. OBS and the stage window play it too.') : null),
+              this.note(server
+                ? 'Each one is a single file. Put it in the actions folder and click Reload actions.'
+                : 'Each one is a single file. Actions load in the EASY-TUBER desktop app.')),
+          defs.length ? this.note('Test switches the editor to Live. OBS and the stage window play it too.') : null,
+          ...skipped.map((f) => el('p', { class: 'note warn-text' }, `${f.src.split('/').pop()} was skipped: ${f.message}`)),
+          server ? folder : null,
+          server ? this.note('Only add action files you trust: an action is a small program that runs inside EASY-TUBER.') : null),
         server ? this.streamerBot(defs)
           : this.section('Streamer.bot', this.note('Hotkeys and Streamer.bot work in the EASY-TUBER desktop app.')),
       );
