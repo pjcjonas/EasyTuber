@@ -480,7 +480,7 @@
       this.save();
       if (this.stageMode) return;
       this.syncLook();
-      if (o.structure) { PT.Panels.renderPartList(); PT.Panels.renderInspector(); PT.Panels.renderStageTab(); }
+      if (o.structure) { PT.Panels.renderPartList(); PT.Panels.renderInspector(); PT.Panels.renderStageTab(); PT.Panels.renderAccessories(); }
       else if (o.transform || o.settings) PT.Panels.syncInspector();
     },
 

@@ -50,8 +50,9 @@
 
     get project() { return PT.App.project; },
     list() { return this.project.library || (this.project.library = []); },
-    // library parts for a part: the ones made for it first, then (all) the rest
-    for(partId, all = false) { return this.list().filter((x) => x.part === partId || (all && x.part !== partId)); },
+    // library parts (not accessories) for a part: the ones made for it, then (all) the rest
+    parts() { return this.list().filter((x) => x.kind !== 'accessory'); },
+    for(partId, all = false) { return this.parts().filter((x) => x.part === partId || (all && x.part !== partId)); },
 
     // every other avatar's version of a part, when it has a picture: [{ avatar, part }]
     fromAvatars(partId) {
@@ -105,7 +106,7 @@
       if (this.list().length >= MAX) { PT.toast(`The library is full (${MAX} parts).`, 'warn'); return null; }
       const place = {};
       for (const k of PLACE) place[k] = part[k];
-      const item = { id: uid(), name: (name || `${PT.Avatars.activeName()}: ${PT.partName(PT.PART[id])}`).slice(0, 60), part: id, images: clone(part.images), adj: clone(part.adj || {}), place, at: Date.now() };
+      const item = { id: uid(), kind: 'part', name: (name || `${PT.Avatars.activeName()}: ${PT.partName(PT.PART[id])}`).slice(0, 60), part: id, images: clone(part.images), adj: clone(part.adj || {}), place, at: Date.now() };
       this.list().push(item);
       PT.App.changed({ settings: true });
       return item;
@@ -137,7 +138,7 @@
         if (this.list().length >= MAX) { PT.toast(`The library is full (${MAX} parts).`, 'warn'); break; }
         const def = PT.PART[g.part];
         const name = g.names.length === 1 ? g.names[0] : def ? PT.partName(def) : g.names[0];
-        const item = { id: uid(), name: name.slice(0, 60), part: g.part, images: g.images, adj: {}, place: null, at: Date.now() };
+        const item = { id: uid(), kind: 'part', name: name.slice(0, 60), part: g.part, images: g.images, adj: {}, place: null, at: Date.now() };
         this.list().push(item);
         added.push(item);
       }

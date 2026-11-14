@@ -28,8 +28,8 @@ test('the library is kept with the project, cleaned', () => {
     ],
   });
   assert.deepEqual(plain(p.library), [
-    { id: 'l1', name: 'Red hat', part: 'face', images: { main: A, 'main@happy': B }, adj: {}, place: { x: 1, y: 2, rot: 3, scale: 1, px: 4, py: 5, flip: true }, at: 7 },
-    { id: 'l2', name: 'Part', part: '', images: { open: C }, adj: {}, place: null, at: 0 },   // unknown part: for any part
+    { id: 'l1', kind: 'part', name: 'Red hat', part: 'face', images: { main: A, 'main@happy': B }, adj: {}, place: { x: 1, y: 2, rot: 3, scale: 1, px: 4, py: 5, flip: true }, at: 7 },
+    { id: 'l2', kind: 'part', name: 'Part', part: '', images: { open: C }, adj: {}, place: null, at: 0 },   // unknown part: for any part
   ]);
   assert.deepEqual(plain(PT.normalizeProject({}).library), []);          // older files have none
   assert.deepEqual(plain(PT.defaultProject().library), []);
@@ -69,4 +69,16 @@ test('the library\'s pictures are stored as files and inlined by Save file, like
   vm.runInContext(src, ctx);
   const slots = ctx.PT.Storage.pictureSlots({ parts: { face: { images: { main: A } } }, avatars: [], library: [{ id: 'l1', images: { main: B, open: C } }] });
   assert.equal(slots.map(([o, k]) => o[k]).join(), [A, B, C].join());
+});
+
+test('accessories are library entries of their own kind, for no part in particular', () => {
+  const PT = loadPT();
+  const p = PT.normalizeProject({ library: [
+    { id: 'l1', kind: 'accessory', name: 'Bow', part: 'face', images: { main: A } },
+    { id: 'l2', kind: 'weird', name: 'Eyes', part: 'eyes', images: { open: B } },
+  ] });
+  assert.deepEqual(p.library.map((x) => x.kind + ':' + x.part).join(), 'accessory:,part:eyes');   // an accessory is for any part
+  PT.App = { project: p };
+  assert.equal(PT.Library.parts().map((x) => x.name).join(), 'Eyes');                          // not in the parts library list
+  assert.equal(PT.Library.for('eyes', true).map((x) => x.name).join(), 'Eyes');               // nor in Swap part's library tiles
 });
