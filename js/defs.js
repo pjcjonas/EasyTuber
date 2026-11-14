@@ -171,6 +171,7 @@
     actionSound: 'editor',  // where action sounds play: editor | obs (the stage pages) | off
     actionVolume: 100,      // 0..100, for every action sound
     updateNotice: true,     // ask GitHub at start-up whether a newer version is out
+    actionPick: '',         // the action the Actions tab shows
     // how the avatar looks in Live, the stage window and OBS (not while editing)
     dimSilent: 0,           // 0..100: how much darker the avatar is while you are quiet
     outlineWidth: 0,        // 0..20 stage units: a sticker outline around the whole avatar (0 = none)

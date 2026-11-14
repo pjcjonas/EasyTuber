@@ -840,7 +840,38 @@
               PT.Actions.isHeld(def.id) ? '■ Turn off' : '▶ Turn on')
             : el('button', { class: 'btn small', title: 'Play it here, in the stage window and in OBS', onclick: () => app.playAction(def.id) }, '▶ Test')),
         el('div', { class: 'av-bottom' }, this.hotkeyRow('action:' + def.id, (p.actions[def.id] || {}).hotkey || '')),
-        el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), cooldown, ...settings));
+        el('div', { class: 'action-settings' }, el('div', { class: 'action-settings-title' }, 'Settings'), ...settings, cooldown));
+    },
+
+    // which action the Actions tab shows (remembered, so a redraw or a restart keeps it)
+    pickedAction(defs) {
+      if (!defs.some((d) => d.id === this.actionPick)) {
+        const saved = this.project.stage.actionPick || '';
+        this.actionPick = defs.some((d) => d.id === saved) ? saved : (defs[0] && defs[0].id) || '';
+      }
+      return defs.find((d) => d.id === this.actionPick) || null;
+    },
+    actionOption(d) { return d.label + (d.hold ? (PT.Actions.isHeld(d.id) ? ' (held: on)' : ' (held)') : ` (${(d.duration / 1000).toFixed(1)} s)`); },
+
+    // a dropdown of every action; the one chosen shows its Test button, hotkey and settings below
+    actionPicker(defs) {
+      const def = this.pickedAction(defs);
+      const pick = el('select', { 'aria-label': 'Action', class: 'action-pick' },
+        ...defs.map((d) => el('option', { value: d.id, 'data-action': d.id }, this.actionOption(d))));
+      pick.value = def.id;
+      const box = el('div', {}, this.actionRow(def));
+      pick.addEventListener('change', () => {
+        this.actionPick = pick.value;
+        this.project.stage.actionPick = pick.value;   // saved with the settings, so a restart keeps it
+        this.app.changed({ settings: true });
+        if (this.capture) this.capture.cancel();
+        // the old action's sliders go, the new one's come in
+        this.syncers = this.syncers.filter((x) => !x.actionRow);
+        const before = this.syncers.length;
+        box.replaceChildren(this.actionRow(defs.find((d) => d.id === pick.value)));
+        for (let i = before; i < this.syncers.length; i++) Object.assign(this.syncers[i], { actionsTab: true, actionRow: true });
+      });
+      return el('div', { class: 'action-picker' }, el('div', { class: 'row' }, pick), box);
     },
 
     // sequences kept from the builder: play, rename, hotkey, a short Streamer.bot address, delete
@@ -896,6 +927,11 @@
         const on = PT.Actions.isHeld(b.getAttribute('data-held'));
         b.textContent = on ? '■ Turn off' : '▶ Turn on';
         b.classList.toggle('on', on);
+      }
+      // and its name in the dropdown
+      for (const o of document.querySelectorAll('#tab-actions option[data-action]')) {
+        const d = PT.Actions.get(o.value);
+        if (d && d.hold) o.textContent = this.actionOption(d);
       }
     },
 
@@ -1065,7 +1101,7 @@
       host.append(
         this.section('Your actions',
           defs.length
-            ? el('div', { class: 'avatar-list' }, ...defs.map((d) => this.actionRow(d)))
+            ? this.actionPicker(defs)
             : el('div', {},
               this.note('No actions yet. An action is an animation you made: a wave, a spin, a prop that flies in.'),
               this.note(server
