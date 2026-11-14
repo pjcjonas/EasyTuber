@@ -271,15 +271,20 @@ Keep several avatars (outfits, moods, characters) and switch between them with k
 
 ![Switching avatars: the parts fall off and the new avatar climbs in](docs/screenshots/avatar-switch.gif)
 
-Open the **Avatars** tab:
+Open the **Avatars** tab. It has two lists:
+
+* **My skins** are the looks of your main character: outfits, moods, seasons. These are what the hotkeys, **Next skin** and **Random mix** switch between.
+* **Avatars** are characters of their own, such as a pet, a sidekick or a guest. They don't have switching hotkeys and aren't used by Next skin or Random mix; later they can be brought in by actions. **Edit** puts one on screen so you can work on it (OBS shows it too while it's on).
+
+**→ Avatars** and **← Skins** move one between the two lists.
 
 ![The Avatars tab](docs/screenshots/avatars-tab.png)
 
-* **+ New avatar** starts a new one from the placeholder. **Duplicate** copies what's on screen, which is the quick way to make an outfit change or a different expression. **Add from file…** adds the avatars from a saved `.easytuber.json` (so avatars you made separately can live together).
-* **Show** puts an avatar on screen. Rename an avatar by typing in its name box. Everything you edit (images, positions, joints, draw order) belongs to the avatar on screen. Motion, mic and stage settings are shared by all of them.
+* **+ New skin** and **+ New avatar** start a new one from the placeholder. **Duplicate as skin** / **Duplicate as avatar** copy what's on screen, which is the quick way to make an outfit change. **Add from file…** adds the skins and avatars from a saved `.easytuber.json` (so ones you made separately can live together).
+* **Show** puts a skin on screen. Rename an avatar by typing in its name box. Everything you edit (images, positions, joints, draw order) belongs to the avatar on screen. Motion, mic and stage settings are shared by all of them.
 * **Set key**, then press the combination you want, such as **Ctrl+Alt+1**. Esc cancels; Backspace removes the key. A key needs Ctrl, Alt or Shift with it, except F-keys and numpad keys, which can be used alone. That's so your normal typing keeps working everywhere.
-* **Random mix** builds a new look from your avatars: each part comes from a random avatar (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as an avatar. Mixing works best when your avatars were drawn on the same canvas, in the same pose.
-* **Build a mix** lets you choose instead of leaving it to chance: one row per part, each with the avatar it comes from. Change a row and the stage and OBS show the result straight away. Your avatars are not changed. **Save as avatar** keeps the mix as a new avatar.
+* **Random mix** builds a new look from your skins: each part comes from a random skin (both pieces of an arm always come from the same one). Give it a key, or click **🎲 Mix now**. Every press makes a new mix. Like one? **Keep this mix** saves it as a skin. Mixing works best when your skins were drawn on the same canvas, in the same pose.
+* **Build a mix** lets you choose instead of leaving it to chance: one row per part, each with the skin it comes from. Change a row and the stage and OBS show the result straight away. Your skins are not changed. **Save as skin** keeps the mix as a new skin.
 * **Swap a part.** Select a part. In the **Part** tab, under **Swap part**, are pictures of that part from each of your other avatars and from your parts library. Click one and it replaces this avatar's part: from an avatar it keeps that avatar's placement; from the library it keeps the placement it was saved with, or is fitted into place. **↩ Undo swap** puts the old one back.
 
 ### Parts library
@@ -291,7 +296,7 @@ The parts library is a collection of parts kept apart from your avatars, to buil
 * **Upload parts…** (Avatars tab, under **Parts library**) adds many pictures at once. They are sorted by file name like dropped layers: `eyes_open.png` and `eyes_closed.png` become one pair of eyes; a picture whose name matches no part becomes a part for *any part*.
 * In the **Parts library** list you can rename a part, change which part it is for, or delete it. Deleting it from the library doesn't take it off an avatar that uses it.
 * To build a new avatar from the library, click **+ New avatar**, then select each part and pick from **Swap part**. Tick **Show library parts made for other parts too** to put, say, a sticker on any part.
-* **Next avatar** steps through your avatars in order with one key.
+* **Next skin** steps through your skins in order with one key.
 * **Switch animation** turns the drop-out / climb-in effect on or off. **Test the animation** plays it here and in OBS.
 
 Hotkeys work as long as EASY-TUBER is running, even minimised. While it runs, the keys you bind don't reach other programs, so pick combinations you don't use elsewhere. If another program already uses a combination, it shows in red: pick a different one.
@@ -453,7 +458,7 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 | **Ctrl+Z** / **Ctrl+Shift+Z** | Undo / redo |
 | **F5** | Reload |
 | **F12** | Developer tools |
-| *Your avatar hotkeys* | Switch avatar, next avatar, random mix (set in the Avatars tab; work in any program) |
+| *Your skin hotkeys* | Switch skin, next skin, random mix (set in the Avatars tab; work in any program) |
 | *Your action hotkeys* | Play an action or a saved sequence (set in the Actions tab; work in any program) |
 | *Your expression hotkeys* | Put an expression on, or take it off (set in the Avatars tab; work in any program) |
 

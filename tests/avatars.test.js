@@ -148,3 +148,49 @@ test('what a mix was made from is kept only while a mix is on screen', () => {
   assert.equal(plainOne.mix, null);
   assert.equal(PT.normalizeProject({}).mix, null);
 });
+
+test('skins and avatars: every avatar is one or the other, skins by default', () => {
+  const p = PT.normalizeProject({
+    parts: {},
+    avatars: [
+      { id: 'a', name: 'Old one', hotkey: 'F5', look: null },                  // from before the split
+      { id: 'b', name: 'Pet', kind: 'avatar', hotkey: 'F6', look: lookWith('B') },
+      { id: 'c', name: 'Odd', kind: 'something', look: lookWith('C') },
+    ],
+    activeAvatar: 'a',
+  });
+  assert.deepEqual(p.avatars.map((a) => a.kind).join(), 'skin,avatar,skin');
+  assert.equal(p.avatars[0].hotkey, 'F5');
+  assert.equal(p.avatars[1].hotkey, '');                                       // an avatar has no switching key
+  assert.equal(PT.defaultProject().avatars[0].kind, 'skin');
+});
+
+test('hotkeys, Next and Random mix only use skins', async () => {
+  const project = PT.normalizeProject({
+    parts: {},
+    avatars: [
+      { id: 's1', name: 'Skin 1', hotkey: 'F1', look: null },
+      { id: 'p1', name: 'Pet', kind: 'avatar', look: lookWith('P') },
+      { id: 's2', name: 'Skin 2', hotkey: 'F2', look: lookWith('S') },
+    ],
+    activeAvatar: 's1',
+  });
+  PT.App = { project, changed() {}, afterLookChange() {} };
+  const A = PT.Avatars;
+  assert.deepEqual(A.skins().map((a) => a.id).join(), 's1,s2');
+  assert.deepEqual(A.others().map((a) => a.id).join(), 'p1');
+  assert.deepEqual(plain(A.bindings()), [{ accelerator: 'F1', action: 'avatar:s1' }, { accelerator: 'F2', action: 'avatar:s2' }]);
+  // moving a skin to Avatars drops its key
+  PT.Storage = { setHotkeys: async () => null };
+  PT.Panels = {};
+  await A.setKind(project.avatars[2], 'avatar');
+  assert.equal(project.avatars[2].kind, 'avatar');
+  assert.equal(project.avatars[2].hotkey, '');
+  assert.equal(A.skins().length, 1);
+  await A.setKind(project.avatars[2], 'skin');
+  assert.equal(A.skins().length, 2);
+  // a new one goes in the list it was made for, with a name to match
+  const pet = A.add(null, A.blankLook(), 'avatar'), skin = A.add(null, A.blankLook());
+  assert.equal(pet.kind, 'avatar'); assert.equal(pet.name, 'Avatar 2');
+  assert.equal(skin.kind, 'skin'); assert.equal(skin.name, 'Skin 3');
+});
