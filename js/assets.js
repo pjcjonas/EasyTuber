@@ -113,24 +113,46 @@
 
     hasUser(partId) { return !!this.user[partId] && Object.keys(this.user[partId]).length > 0; },
 
-    // The image that defines a part's coordinate frame (first state that exists).
+    // The image that defines a part's coordinate frame: the first state that exists, or, for a part
+    // that only has images for expressions, the first of those.
     primary(partId, usePlaceholder = true) {
       const def = PT.PART[partId];
       const set = this.hasUser(partId) ? this.user[partId] : (usePlaceholder ? this.placeholders[partId] : null);
       if (!set) return null;
       for (const st of def.states) if (set[st]) return set[st];
-      return null;
+      const other = Object.keys(set).sort()[0];
+      return other ? set[other] : null;
     },
 
     /*
      * Pick the image to draw for a wanted state, with sensible fallbacks.
-     * Returns { entry, squash } where squash (y scale) fakes a missing state.
+     * Returns { entry, squash, state } where squash (y scale) fakes a missing state and state is
+     * the key of the image used. With an expression, the part's images for it ('open@happy') are
+     * tried first, with the same fallbacks, so blinking and talking go on inside an expression;
+     * a part with none for it shows its normal images.
      */
-    resolve(partId, want, usePlaceholder = true) {
+    resolve(partId, want, usePlaceholder = true, expression = '') {
       const user = this.hasUser(partId);
+      if (expression && user) {
+        const own = this.resolveIn(partId, want, this.user[partId], '@' + expression);
+        if (own) return own;
+      }
       const set = user ? this.user[partId] : (usePlaceholder ? this.placeholders[partId] : null);
       if (!set) return null;
+      return this.resolveIn(partId, want, set, '');
+    },
+
+    // suffix: '' for the normal images, '@<expression>' for an expression's
+    resolveIn(partId, want, all, suffix) {
       const def = PT.PART[partId];
+      // the same lookups as before, on the images whose key ends with the suffix
+      const set = {};
+      for (const st of def.states) if (all[st + suffix]) set[st] = all[st + suffix];
+      const found = this.pick(partId, want, set, def);
+      return found ? { ...found, state: found.state + suffix } : null;
+    },
+
+    pick(partId, want, set, def) {
       if (def.states.length === 1) return set.main ? { entry: set.main, squash: 1, state: 'main' } : null;
 
       const chains = {

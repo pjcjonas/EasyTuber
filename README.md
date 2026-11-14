@@ -281,6 +281,29 @@ Open the **Avatars** tab:
 
 Hotkeys work as long as EASY-TUBER is running, even minimised. While it runs, the keys you bind don't reach other programs, so pick combinations you don't use elsewhere. If another program already uses a combination, it shows in red: pick a different one.
 
+### Expressions
+
+An expression is a face you switch to: happy, angry, surprised. It swaps the images of the parts you choose and leaves everything else as it is, so the avatar keeps blinking, talking and moving.
+
+1. In the **Avatars** tab under **Expressions**, click **+ New expression** and name it.
+2. Select a part that should look different, for example the eyes. In the **Part** tab, above the image slots, choose **Expression: …** and give the slots their images. Do the same for any other part: the mouth, the face (a blush), a part of your own.
+3. A slot you leave empty uses the normal image. With one image for the eyes, a blink squashes it, as it does for normal eyes.
+4. Back in the Avatars tab, **Show** puts the expression on, in Live, the stage window and OBS. **Turn off** goes back to normal. **Set key** gives it a global hotkey: press it to put the expression on, press it again to take it off.
+
+A part of your own that only has an image for an expression shows up only while that expression is on: tears, a sweat drop, an anger mark.
+
+Expressions are shared by all avatars, and each avatar has its own images for them.
+
+**From Streamer.bot.** **Copy address** gives the address that puts the expression on. The name in it is the expression's name in small letters (`Very happy` is `very-happy`), so renaming an expression changes its address.
+
+```
+http://127.0.0.1:8777/api/streamerbot?expression=happy          put it on
+http://127.0.0.1:8777/api/streamerbot?expression=happy&for=5    for 5 seconds, then back to what was on
+http://127.0.0.1:8777/api/streamerbot?expression=off            back to normal
+```
+
+Send it with a **Fetch URL** sub-action and the header `X-EasyTuber-Control: streamerbot`, as for actions (section 12).
+
 ---
 
 ## 12. Actions: your own animations
@@ -405,6 +428,7 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 | **F12** | Developer tools |
 | *Your avatar hotkeys* | Switch avatar, next avatar, random mix (set in the Avatars tab; work in any program) |
 | *Your action hotkeys* | Play an action or a saved sequence (set in the Actions tab; work in any program) |
+| *Your expression hotkeys* | Put an expression on, or take it off (set in the Avatars tab; work in any program) |
 
 On a Mac, use **Cmd** where this says Ctrl.
 

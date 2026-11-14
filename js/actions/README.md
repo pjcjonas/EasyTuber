@@ -75,6 +75,7 @@ PT.Actions.define({
   - Scales multiply.
   - Children follow their parent: rotating `torso` carries the head and arms with it.
 - **`states(a)`** overrides the eye and mouth frames, for example `{ eyes: 'closed', mouth: 'open' }`. Eyes take `open half closed`; mouth takes `closed half open`.
+  - It can also put one of the user's expressions on while the action plays: `{ expression: 'happy' }`. The id is the expression's name in small letters with `-` for anything else (`a.project.expressions` lists them). An expression the user doesn't have changes nothing.
 - **`parts(a, partId)`** moves one part on its own, in screen space, without moving its children. This is how the avatar-switch animation works. It returns `{ dx, dy, rot, scale, alpha, hide }` or `null`.
 - **`behind(a, g)`** and **`front(a, g)`** draw on the canvas behind or in front of the avatar. `g` is a CanvasRenderingContext2D already set to stage units: (0, 0) is the top-left of the stage and `PT.STAGE_W` × `PT.STAGE_H` is the bottom-right. Save and restore yourself if you change more than drawing state.
 
@@ -192,7 +193,7 @@ http://127.0.0.1:8777/api/streamerbot?action=wave&user=%user%&amount=500
 ```
 
 - Streamer.bot replaces its own variables, such as `%user%`, before it sends the URL. The **Values for the action** box in the Actions tab adds them to the copied URL as you typed them.
-- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `run`, `startDelay`, `delay`, `stop`, `hold`, `queue` and `force` are taken.
+- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `run`, `startDelay`, `delay`, `stop`, `hold`, `queue`, `force`, `expression` and `for` are taken.
 - Up to 16 values, each up to 200 characters.
 - Text with `&`, `#` or `+` in it has to be URL-encoded before it goes in the URL, or it is cut short. Names and numbers are fine as they are.
 - In a sequence, every action step gets the same values.

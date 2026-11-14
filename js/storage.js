@@ -253,10 +253,10 @@
 
     /* Actions (desktop app only): tell the server which actions exist, so Streamer.bot requests can be
        checked and timed. actions = [{ id, label, duration }] */
-    async setActions(actions, sequences = []) {
+    async setActions(actions, sequences = [], expressions = []) {
       if (!this.server) return false;
       try {
-        const r = await fetch('api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions, sequences }) });
+        const r = await fetch('api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions, sequences, expressions }) });
         return r.ok;
       } catch (e) { return false; }
     },
@@ -318,7 +318,7 @@
 
     onHotkey(fn) {
       const es = this.events();
-      if (es) es.addEventListener('hotkey', (e) => { try { fn(JSON.parse(e.data).action); } catch (err) { /* ignore */ } });
+      if (es) es.addEventListener('hotkey', (e) => { try { const d = JSON.parse(e.data); fn(d.action, d); } catch (err) { /* ignore */ } });
     },
 
     onMessage(fn) {

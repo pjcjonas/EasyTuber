@@ -168,6 +168,17 @@
     updateNotice: true,     // ask GitHub at start-up whether a newer version is out
   };
 
+  PT.MAX_EXPRESSIONS = 20;
+  // the key a part's image for a state is kept under: 'open', or 'open@happy' in an expression
+  PT.imageKey = (state, expression) => (expression ? state + '@' + expression : state);
+  // an id for a new expression from its name: "Very Happy!" -> "very-happy" (made unique with a number)
+  PT.expressionId = (name, taken = []) => {
+    const base = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'expression';
+    let id = base === 'off' ? 'off-1' : base;
+    for (let n = 2; taken.includes(id); n++) id = base + '-' + n;
+    return id;
+  };
+
   PT.BG_COLORS = { green: '#00ff00', blue: '#0000ff', magenta: '#ff00ff' };
 
   PT.defaultPart = (id) => {
@@ -193,6 +204,11 @@
     avatars: [{ id: 'a1', name: 'Avatar 1', hotkey: '', look: null }],
     activeAvatar: 'a1',
     mix: null,                           // set while a mix is on screen (see normalizeProject)
+    /* Expressions: named faces (happy, angry…) shared by every avatar. A part's image for one is
+       kept beside its normal images as images['<state>@<expression id>'], e.g. 'open@happy' or
+       'main@happy'; a part with no image for the expression shows its normal one. */
+    expressions: [],                     // [{ id, name, hotkey }]
+    expression: '',                      // the one on screen ('' = normal)
     hotkeys: { next: '', random: '' },   // Electron accelerators, e.g. "Ctrl+Alt+1"
     switchFx: true,                      // drop out / climb back in when switching
     actions: {},                         // { [actionId]: { hotkey, settings: { key: value }, cooldown } }
@@ -246,6 +262,12 @@
       out.mix = {};
       for (const [k, v] of Object.entries(p.mix)) if (PT.PART[k] && typeof v === 'string' && out.avatars.some((a) => a.id === v)) out.mix[k] = v;
     }
+    const exprIds = new Set();
+    out.expressions = (Array.isArray(p.expressions) ? p.expressions : [])
+      .filter((x) => x && typeof x.id === 'string' && /^[a-z0-9][a-z0-9_-]{0,39}$/.test(x.id) && x.id !== 'off' && !exprIds.has(x.id) && exprIds.add(x.id))
+      .slice(0, PT.MAX_EXPRESSIONS)
+      .map((x) => ({ id: x.id, name: str(x.name, 40).trim() || x.id, hotkey: str(x.hotkey, 64) }));
+    out.expression = out.expressions.some((x) => x.id === p.expression) ? p.expression : '';
     out.hotkeys = { next: str((p.hotkeys || {}).next, 64), random: str((p.hotkeys || {}).random, 64) };
     out.switchFx = p.switchFx !== false;
     // per action (js/actions/*.js): its global hotkey and its settings. Shared by every avatar.

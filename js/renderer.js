@@ -122,7 +122,7 @@
         if (!p.visible) continue;
         const def = PT.PART[id];
         const want = def.states.length > 1 ? (states[id] || def.states[0]) : 'main';
-        const r = PT.Assets.resolve(id, want, usePH);
+        const r = PT.Assets.resolve(id, want, usePH, states.expression);
         if (!r) continue;
         const fx = opts.fx ? opts.fx(id, now) : null;   // avatar-switch animation and actions
         if (fx && fx.hide) continue;
@@ -158,7 +158,7 @@
         const id = project.order[i];
         if (!project.parts[id].visible) continue;
         const def = PT.PART[id];
-        const r = PT.Assets.resolve(id, def.states.length > 1 ? (states[id] || def.states[0]) : 'main', usePH);
+        const r = PT.Assets.resolve(id, def.states.length > 1 ? (states[id] || def.states[0]) : 'main', usePH, states.expression);
         if (!r) continue;
         const adj = project.parts[id].adj;
         const m = this.entryMatrix(pose, id, r.entry, r.squash, usePH, adj && adj[r.state]);
