@@ -25,6 +25,20 @@
   }
 
   const clamp01 = (u) => Math.max(0, Math.min(1, u));
+
+  /* the values a play came with (from the Streamer.bot URL): text only, a fixed size, never changed */
+  const NO_ARGS = Object.freeze({});
+  function cleanArgs(args) {
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return NO_ARGS;
+    const out = {};
+    let count = 0;
+    for (const [k, v] of Object.entries(args)) {
+      if (!ID.test(k) || k === '__proto__' || (typeof v !== 'string' && !Number.isFinite(v))) continue;
+      if (++count > 16) break;
+      out[k] = String(v).slice(0, 200);
+    }
+    return Object.freeze(out);
+  }
   const ease = {
     linear: (u) => u,
     inQuad: (u) => u * u,
@@ -131,11 +145,13 @@
     },
 
     /* ---------- playing ---------- */
-    newPlay(id) {
-      return { type: 'action', id, n: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), seed: (Math.random() * 4294967296) >>> 0 };
+    newPlay(id, args = null) {
+      const msg = { type: 'action', id, n: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), seed: (Math.random() * 4294967296) >>> 0 };
+      if (args) msg.args = args;
+      return msg;
     },
 
-    /* Start an action on this page. msg = { n, seed } from the server or newPlay().
+    /* Start an action on this page. msg = { n, seed, args } from the server or newPlay().
        Returns false when the action isn't defined here. */
     play(id, msg = {}, project = PT.App && PT.App.project, now = performance.now()) {
       const def = this.defs.get(id);
@@ -148,7 +164,7 @@
       // a second play of the same action restarts it, unless it allows copies to overlap
       if (!def.overlap) this.running = this.running.filter((r) => r.def !== def);
       const seed = Number.isFinite(msg.seed) ? msg.seed : (Math.random() * 4294967296) >>> 0;
-      const run = { def, t0: now, n: msg.n || null, seed, settings: this.settingsFor(project, def), state: {}, random: mulberry32(seed) };
+      const run = { def, t0: now, n: msg.n || null, seed, args: cleanArgs(msg.args), settings: this.settingsFor(project, def), state: {}, random: mulberry32(seed) };
       this.running.push(run);
       this.call(run, 'start', now, project);
       return true;
@@ -167,7 +183,7 @@
       const self = this;
       return {
         id: run.def.id, ms, duration: d, t: clamp01(ms / d),
-        settings: run.settings, state: run.state, random: run.random, seed: run.seed,
+        settings: run.settings, state: run.state, random: run.random, seed: run.seed, args: run.args,
         project: project || (PT.App && PT.App.project), ease,
         // 0 -> 1 over the first inMs, 1 -> 0 over the last outMs: blends the action in and out
         envelope(inMs = 150, outMs = 250) {

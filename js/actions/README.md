@@ -61,6 +61,7 @@ PT.Actions.define({
 | `a.random()` | seeded random number 0..1. It gives the same numbers in the editor, the stage window and OBS. Use it instead of `Math.random()`. |
 | `a.settings` | this action's settings, with defaults filled in |
 | `a.state` | an empty object for this run, to keep things between frames |
+| `a.args` | the values this play came with, from the Streamer.bot URL: `…?action=wave&user=Bob&amount=500` gives `a.args.user === 'Bob'` and `a.args.amount === '500'`. Every value is text, so use `Number(a.args.amount)` for a number. It is an empty object when there are none (Test, a hotkey), so give each value a fallback: `a.args.user \|\| 'someone'`. |
 | `a.at(partId, u, v)` | where a point on a part is right now, in stage units. `u, v` are 0..1 across the part's image, so `a.at('armRLower', 0.5, 1)` is the bottom of the right forearm (the hand) |
 | `a.image(src)` | a cached picture, for example `a.image('media/actions/wave/sparkle.png')`. It is `null` until it has loaded. |
 | `a.project` | the whole project (read only) |
@@ -99,8 +100,24 @@ Both are served to OBS.
 ```
 Test button / hotkey / Streamer.bot URL
   → server (electron/server.js)  checks the id against the actions the editor loaded, times sequences
-  → "live" event { type: 'action', id, n, seed } to every page
+  → "live" event { type: 'action', id, n, seed, args } to every page
   → PT.Actions.play() in the editor, the stage window and OBS (n stops a double play)
 ```
 
 The Streamer.bot URL is `http://127.0.0.1:8777/api/streamerbot?action=<id>`. For a sequence, use `?sequence=a,b,next&startDelay=1&delay=2.5`, which runs up to 8 steps. Steps can also be `next`, `random` or `avatar:<id>`. Send the header `X-EasyTuber-Control: streamerbot`.
+
+### Values from Streamer.bot
+
+Anything else in the URL is passed to the action as `a.args`:
+
+```
+http://127.0.0.1:8777/api/streamerbot?action=wave&user=%user%&amount=500
+```
+
+- Streamer.bot replaces its own variables, such as `%user%`, before it sends the URL. The **Values for the action** box in the Actions tab adds them to the copied URL as you typed them.
+- A name is letters, digits, `-` or `_`, up to 40 characters, and can be used once. `action`, `sequence`, `startDelay` and `delay` are taken.
+- Up to 16 values, each up to 200 characters.
+- Text with `&`, `#` or `+` in it has to be URL-encoded before it goes in the URL, or it is cut short. Names and numbers are fine as they are.
+- In a sequence, every action step gets the same values.
+
+A viewer can put anything in a value, so treat it as text to show. Draw it with `g.fillText()`; don't build code or file paths from it.
