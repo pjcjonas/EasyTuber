@@ -36,7 +36,7 @@ const AVATAR_ACTION = /^(next|random|avatar:[\w-]{1,40})$/;
 const ACTION_ID = /^[\w-]{1,40}$/;
 const SWITCH_MS = 1800;        // an avatar switch in a sequence: drop out + climb back in
 const MAX_STEPS = 8;
-const RESERVED = new Set(['action', 'sequence', 'run', 'startDelay', 'delay', 'stop', 'hold', 'queue', 'force']);   // the URL's own options
+const RESERVED = new Set(['action', 'sequence', 'run', 'startDelay', 'delay', 'stop', 'hold', 'queue', 'force', 'expression', 'for']);   // the URL's own options
 const MAX_SAVED = 50;          // saved sequences
 const MAX_QUEUE = 20;          // sequences waiting for their turn
 const MAX_COOLDOWN = 3600000;  // an action's cooldown, ms
@@ -61,7 +61,7 @@ function actionArgs(params) {
 }
 function validBinding(b) {
   if (!b || typeof b.accelerator !== 'string' || typeof b.action !== 'string') return false;
-  if (b.accelerator.length > 64 || !(AVATAR_ACTION.test(b.action) || /^(action|sequence):[\w-]{1,40}$/.test(b.action))) return false;
+  if (b.accelerator.length > 64 || !(AVATAR_ACTION.test(b.action) || /^(action|sequence|expression):[\w-]{1,40}$/.test(b.action))) return false;
   const parts = b.accelerator.split('+');
   const key = parts.pop(), mods = parts;
   if (!KEY.test(key) || !mods.every((m) => MODIFIERS.has(m)) || new Set(mods).size !== mods.length) return false;
@@ -133,6 +133,7 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   const listeners = new Set();
   let catalog = new Map();       // actions the editor has loaded
   let saved = new Map();         // the editor's saved sequences: id -> { steps, startDelay, delay, args }
+  let expressions = new Set();   // the ids of the editor's expressions
   let sequenceTimer = null;      // a sequence step waiting to play
   let nonce = 0;
   const held = new Map();        // held actions that are on: id -> the message that started it
@@ -401,8 +402,11 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         if (!next) return sendJson(res, 400, { error: 'bad action list' });
         const nextSaved = parseSequences(data.sequences);
         if (!nextSaved) return sendJson(res, 400, { error: 'bad sequence list' });
+        const exprs = data.expressions === undefined ? [] : data.expressions;
+        if (!Array.isArray(exprs) || exprs.length > 50 || !exprs.every((x) => typeof x === 'string' && ACTION_ID.test(x))) return sendJson(res, 400, { error: 'bad expression list' });
         catalog = next;
         saved = nextSaved;
+        expressions = new Set(exprs);
         // a held action whose file is gone (or is no longer a held one) can't be left on
         for (const id of [...held.keys()]) if (!catalog.has(id) || !catalog.get(id).hold) stopHeld(id);
         return sendJson(res, 200, { ok: true, count: catalog.size, held: [...held.keys()] });
@@ -427,6 +431,21 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
           return sendJson(res, 403, { error: 'Use a local URL and send the header X-EasyTuber-Control: streamerbot' });
         }
         const params = new URL(req.url, `http://127.0.0.1:${port}`).searchParams;
+        /* expression=<id> shows an expression, expression=off goes back to normal. With for=<seconds>
+           it is shown that long and then what was on before comes back. The editor does the work. */
+        if (params.has('expression')) {
+          const ids = params.getAll('expression'), keys = [...params.keys()];
+          if (ids.length !== 1 || keys.some((k) => k !== 'expression' && k !== 'for') || params.getAll('for').length > 1) return sendJson(res, 400, { error: 'expression= takes one name, and for=<seconds> if you want' });
+          const id = ids[0];
+          if (id !== 'off' && !expressions.has(id)) return sendJson(res, 404, { error: 'Unknown expression: ' + id.slice(0, 40) + (expressions.size || catalog.size ? '' : ' (is the editor open?)') });
+          let secs = 0;
+          if (params.has('for')) {
+            secs = Number(params.get('for'));
+            if (!/^\d{1,4}(\.\d)?$/.test(params.get('for')) || !(secs >= 0.1 && secs <= 3600)) return sendJson(res, 400, { error: 'for must be 0.1 to 3600 seconds, in tenths' });
+          }
+          broadcast('hotkey', { action: 'expression:' + id, set: true, seconds: secs });
+          return sendJson(res, 202, { accepted: true, expression: id === 'off' ? '' : id });
+        }
         const singles = params.getAll('action'), sequences = params.getAll('sequence'), stops = params.getAll('stop'), runs = params.getAll('run');
         if (singles.length + sequences.length + stops.length + runs.length !== 1) return sendJson(res, 400, { error: 'Send one action=, one sequence=, one run= or one stop=' });
         if (stops.length) {

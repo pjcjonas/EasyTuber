@@ -121,6 +121,7 @@
         if (a.hotkey && PT.Actions && PT.Actions.get(id)) out.push({ accelerator: a.hotkey, action: 'action:' + id });
       }
       for (const s of p.sequences || []) if (s.hotkey) out.push({ accelerator: s.hotkey, action: 'sequence:' + s.id });
+      for (const x of p.expressions || []) if (x.hotkey) out.push({ accelerator: x.hotkey, action: 'expression:' + x.id });
       return out;
     },
     async register(bindings = this.bindings()) {
@@ -139,10 +140,17 @@
       if (p.avatars.some((a) => a.hotkey === acc && a !== except)) return true;
       if (Object.entries(p.actions || {}).some(([id, a]) => a.hotkey === acc && except !== 'action:' + id)) return true;
       if ((p.sequences || []).some((s) => s.hotkey === acc && except !== 'sequence:' + s.id)) return true;
+      if ((p.expressions || []).some((x) => x.hotkey === acc && except !== 'expression:' + x.id)) return true;
       return ['next', 'random'].some((k) => k !== except && p.hotkeys[k] === acc);
     },
 
-    handle(action) {
+    // data: what came with it. A hotkey sends nothing more; Streamer.bot's expression= sends { set, seconds }
+    handle(action, data = {}) {
+      if (action.startsWith('expression:')) {
+        const id = action.slice(11);
+        // a hotkey switches its expression on, and off again when it is already on
+        return PT.App.setExpression(id === 'off' ? '' : id, data.set ? { seconds: data.seconds } : { toggle: true });
+      }
       if (action === 'next' || action === RANDOM) return this.switchTo(action);
       if (action.startsWith('avatar:')) return this.switchTo(action.slice(7));
       if (action.startsWith('action:')) return PT.App.playAction(action.slice(7));
@@ -297,6 +305,9 @@
       } else if (typeof a === 'string' && a.startsWith('sequence:')) {
         const s = (this.project.sequences || []).find((x) => x.id === a.slice(9));
         if (s) s.hotkey = acc;
+      } else if (typeof a === 'string' && a.startsWith('expression:')) {
+        const x = (this.project.expressions || []).find((e) => e.id === a.slice(11));
+        if (x) x.hotkey = acc;
       } else a.hotkey = acc;
       this.app.changed({ settings: true });
       await this.register();

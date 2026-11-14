@@ -12,6 +12,8 @@
     simTalk: false,
     stageMode: false,
     stepped: 0,          // when running actions were last moved on (by a frame, or by the timer in init)
+    exprTemp: null,      // an expression shown for a while: { id, until } (see setExpression)
+    editExpression: '',  // Edit mode: the expression whose images the Part tab is showing
     remote: { v: 0, t: -1e9 },
     lastPose: null,
     lastAnim: null,
@@ -82,6 +84,12 @@
         else if (msg.type === 'blink') this.animator.blink();
         else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
+        else if (msg.type === 'expression') {
+          // the editor changed the expression: show it now, before the saved avatar arrives
+          const id = typeof msg.id === 'string' ? msg.id : '';
+          if (msg.ms > 0) this.exprTemp = { id, until: performance.now() + msg.ms };
+          else { this.exprTemp = null; if (!id || this.project.expressions.some((x) => x.id === id)) this.project.expression = id; }
+        }
         else if (msg.type === 'reload-actions') location.reload();   // the editor is loading its action files again
         else if (msg.type === 'switch-out') {
           if (msg.test) PT.Transition.play();
@@ -184,7 +192,7 @@
       PT.Actions.onError = (def, e) => PT.toast(`Action "${def.label}" stopped with an error: ${e.message}`, 'error', 8000);
       for (const f of this.actionLoad.failed) PT.toast(`Action file ${f.src.split('/').pop()} was skipped: ${f.message}`, 'error', 10000);
       // the server needs the actions (with their cooldowns) and the saved sequences to check and time requests
-      this.sendCatalogNow = () => PT.Storage.setActions(PT.Actions.catalog(this.project), PT.Actions.savedSequences(this.project));
+      this.sendCatalogNow = () => PT.Storage.setActions(PT.Actions.catalog(this.project), PT.Actions.savedSequences(this.project), this.project.expressions.map((x) => x.id));
       this.sendCatalog = PT.debounce(this.sendCatalogNow, 300);
       this.sendCatalogNow();
       PT.Storage.onLive((msg) => {
@@ -194,7 +202,7 @@
       PT.Actions.onHeld = () => PT.Panels.syncHeld();
 
       // global hotkeys: registered by the desktop app, delivered here even while you're in a game
-      PT.Storage.onHotkey((action) => PT.Avatars.handle(action));
+      PT.Storage.onHotkey((action, data) => PT.Avatars.handle(action, data));
       PT.Avatars.register();
       if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => PT.Panels.refreshDevices());
@@ -202,6 +210,92 @@
       if (!window.isSecureContext) {
         PT.toast('Microphone needs a secure page. Close this tab, run start.bat and use the localhost address it opens.', 'warn', 10000);
       }
+    },
+
+    /* ---------------- expressions ---------------- */
+    // the expression to draw right now: one shown for a while wins over the one that is on
+    currentExpression(now = performance.now()) {
+      if (this.exprTemp) {
+        if (now < this.exprTemp.until) return this.exprTemp.id;
+        this.exprTemp = null;
+        if (!this.stageMode) PT.Panels.renderAvatars();
+      }
+      return this.project.expression || '';
+    },
+    /* Show an expression ('' = back to normal), here and on the stage pages.
+       toggle: asking for the one that is on turns it off (what a hotkey does).
+       seconds: show it for that long, then go back to what was on; nothing is saved. */
+    setExpression(id, { toggle = false, seconds = 0 } = {}) {
+      const p = this.project;
+      if (id && !p.expressions.some((x) => x.id === id)) return false;
+      if (seconds > 0) {
+        this.exprTemp = { id, until: performance.now() + seconds * 1000 };
+        PT.Storage.live({ type: 'expression', id, ms: Math.round(seconds * 1000) });
+      } else {
+        if (toggle && id && this.currentExpression() === id) id = '';
+        this.exprTemp = null;
+        p.expression = id;
+        PT.Storage.live({ type: 'expression', id, ms: 0 });
+        this.save();
+      }
+      if (!this.stageMode) PT.Panels.renderAvatars();
+      return true;
+    },
+    addExpression(name = 'New expression') {
+      const p = this.project;
+      if (p.expressions.length >= PT.MAX_EXPRESSIONS) { PT.toast(`That is the most expressions you can add (${PT.MAX_EXPRESSIONS}).`, 'warn'); return null; }
+      const x = { id: PT.expressionId(name, p.expressions.map((e) => e.id)), name: name.slice(0, 40), hotkey: '' };
+      p.expressions.push(x);
+      this.expressionsChanged();
+      return x.id;
+    },
+    /* A new name, and an id to match ("Very happy" -> very-happy), since the id is what a
+       Streamer.bot address and an action use. Its images in every avatar move to the new id. */
+    async renameExpression(id, name) {
+      const p = this.project, x = p.expressions.find((e) => e.id === id);
+      name = String(name || '').trim().slice(0, 40);
+      if (!x || !name) return id;
+      x.name = name;
+      const next = PT.expressionId(name, p.expressions.filter((e) => e !== x).map((e) => e.id));
+      if (next !== id) {
+        const move = (obj) => { for (const k of Object.keys(obj || {})) if (k.endsWith('@' + id)) { obj[k.slice(0, -id.length) + next] = obj[k]; delete obj[k]; } };
+        const each = (look) => { for (const part of Object.values((look && look.parts) || {})) { move(part.images); move(part.adj); } };
+        each(p);
+        for (const a of p.avatars) each(a.look);
+        for (const set of Object.values(PT.Assets.user)) move(set);
+        x.id = next;
+        if (p.expression === id) p.expression = next;
+        if (this.exprTemp && this.exprTemp.id === id) this.exprTemp.id = next;
+        if (this.editExpression === id) this.editExpression = next;
+      }
+      this.expressionsChanged();
+      if (next !== id) { await PT.Avatars.register(); if (p.expression === next) PT.Storage.live({ type: 'expression', id: next, ms: 0 }); }
+      return next;
+    },
+    // its images go from every avatar, and its hotkey with it
+    async removeExpression(id) {
+      const p = this.project;
+      if (!p.expressions.some((x) => x.id === id)) return;
+      p.expressions = p.expressions.filter((x) => x.id !== id);
+      const strip = (look) => {
+        for (const part of Object.values((look && look.parts) || {})) {
+          for (const k of Object.keys(part.images || {})) if (k.endsWith('@' + id)) delete part.images[k];
+          for (const k of Object.keys(part.adj || {})) if (k.endsWith('@' + id)) delete part.adj[k];
+        }
+      };
+      strip(p);
+      for (const a of p.avatars) strip(a.look);
+      for (const set of Object.values(PT.Assets.user)) for (const k of Object.keys(set)) if (k.endsWith('@' + id)) delete set[k];
+      if (p.expression === id) { p.expression = ''; PT.Storage.live({ type: 'expression', id: '', ms: 0 }); }
+      if (this.exprTemp && this.exprTemp.id === id) this.exprTemp = null;
+      if (this.editExpression === id) this.editExpression = '';
+      this.expressionsChanged();
+      await PT.Avatars.register();
+    },
+    expressionsChanged() {
+      this.changed({ structure: true });
+      PT.Panels.renderAvatars();
+      if (this.sendCatalog) this.sendCatalog();   // the app checks expression= in a Streamer.bot address against this
     },
 
     /* ---------------- custom parts ---------------- */
@@ -480,6 +574,8 @@
 
       const editing = !this.stageMode && this.mode === 'edit';
       const showAct = !!act && !editing;        // Edit mode shows the rest pose only
+      this.previewStates.expression = this.editExpression;
+      const liveStates = { ...anim.states, expression: this.currentExpression(now) };
       const R = this.renderer;
       R.resize();
       const pose = R.computePose(p, editing ? null : showAct ? PT.Actions.mergeDeltas(anim.deltas, act.deltas) : anim.deltas);
@@ -489,7 +585,7 @@
       if (showAct) PT.Actions.draw('behind', R);
       const switching = PT.Transition.active;
       const actFx = showAct && PT.Actions.hasPartFx;
-      R.drawRig(p, pose, editing ? this.previewStates : showAct ? { ...anim.states, ...act.states } : anim.states, {
+      R.drawRig(p, pose, editing ? this.previewStates : showAct ? { ...liveStates, ...act.states } : liveStates, {
         dimPlaceholders: editing,
         onionPart: editing && p.stage.onion ? this.selected : null,
         fx: switching || actFx

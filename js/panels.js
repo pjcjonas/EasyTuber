@@ -95,7 +95,7 @@
         const p = this.project.parts[def.id];
         const user = PT.Assets.user[def.id] || {};
         const count = def.states.filter((s) => user[s]).length;
-        const sub = count === 0 ? (def.custom ? 'empty' : 'empty, using placeholder')
+        const sub = count === 0 ? (Object.keys(user).length ? 'only in expressions' : def.custom ? 'empty' : 'empty, using placeholder')
           : def.states.length > 1 ? `${count}/${def.states.length} images` : 'uploaded';
 
         const eye = el('button', {
@@ -122,6 +122,46 @@
           disabled: this.project.customParts.length >= PT.MAX_CUSTOM_PARTS,
           onclick: () => { if (app.addPart()) PT.toast('Part added. Name it, choose what it is attached to, then give it an image.', '', 6000); },
         }, '＋ Add part')));
+    },
+
+    // Named faces: a row each with its name, Show / Turn off, hotkey, Streamer.bot address and Delete
+    expressionList() {
+      const p = this.project, app = this.app, now = app.currentExpression();
+      const wrap = el('div', {},
+        this.note('A happy, angry or surprised face you can switch to with a key. Add one here, then in the Part tab choose it above the image slots and give the parts that change (eyes, mouth, anything) their images for it. Parts without one keep their normal image.'));
+      const address = (id) => {
+        const u = new URL('/api/streamerbot', location.origin);
+        u.hostname = '127.0.0.1';
+        u.searchParams.set('expression', id);
+        return u.href;
+      };
+      for (const x of p.expressions) {
+        const on = now === x.id;
+        const name = el('input', { type: 'text', class: 'av-name', value: x.name, maxlength: 40, 'aria-label': 'Expression name' });
+        name.addEventListener('change', () => app.renameExpression(x.id, name.value));
+        wrap.append(el('div', { class: 'avatar-row' + (on ? ' active' : ''), 'data-expression': x.id },
+          el('div', { class: 'av-top' },
+            el('span', { class: 'av-dot', title: on ? 'On now' : '' }),
+            name,
+            el('button', { class: 'btn small', title: on ? 'Back to the normal face' : 'Show it in Live, the stage window and OBS',
+              onclick: () => { if (!on && app.mode === 'edit') app.setMode('live'); app.setExpression(on ? '' : x.id); } }, on ? 'Turn off' : 'Show')),
+          el('div', { class: 'av-bottom' },
+            this.hotkeyRow('expression:' + x.id, x.hotkey),
+            PT.Storage.server ? el('button', {
+              class: 'btn small', title: address(x.id),
+              onclick: async (e) => { try { await navigator.clipboard.writeText(address(x.id)); PT.toast('Address copied. Add &for=5 to show it for 5 seconds.', '', 5000); } catch (err) { PT.toast(address(x.id), '', 9000); } },
+            }, 'Copy address') : null,
+            el('button', {
+              class: 'icon-btn', title: 'Delete this expression',
+              onclick: () => { if (confirm(`Delete "${x.name}" and its images from every avatar?`)) app.removeExpression(x.id); },
+            }, '🗑'))));
+      }
+      wrap.append(el('div', { class: 'row', style: { marginTop: '6px' } },
+        el('button', {
+          class: 'btn', disabled: p.expressions.length >= PT.MAX_EXPRESSIONS, title: 'Add an expression',
+          onclick: () => { const id = app.addExpression(); if (id) PT.toast('Expression added. Name it, then give parts their images for it in the Part tab.', '', 6000); },
+        }, '+ New expression')));
+      return wrap;
     },
 
     // One row per part group: which avatar it comes from. Changing one shows the result on the stage.
@@ -245,22 +285,32 @@
       const def = PT.PART[id], p = this.project.parts[id];
       const set = (k) => (v) => { PT.Editor.pushUndo(); p[k] = v; app.changed({ transform: true }); };
 
-      // image slots
+      // image slots: the normal images, or the ones for the expression chosen above them
+      const exprs = this.project.expressions;
+      if (!exprs.some((x) => x.id === app.editExpression)) app.editExpression = '';
+      const expr = app.editExpression;
+      const picker = exprs.length ? el('select', { 'aria-label': 'Images for', title: 'Which images to show and change here' },
+        el('option', { value: '' }, 'Normal'), ...exprs.map((x) => el('option', { value: x.id }, 'Expression: ' + x.name))) : null;
+      if (picker) {
+        picker.value = expr;
+        picker.addEventListener('change', () => { app.editExpression = picker.value; this.renderInspector(); });
+      }
       const slots = el('div', { class: 'slots' + (def.states.length === 1 ? ' single' : '') });
-      for (const st of def.states) {
+      for (const state of def.states) {
+        const st = PT.imageKey(state, expr);
         const entry = (PT.Assets.user[id] || {})[st];
-        const previewing = def.states.length > 1 && (app.previewStates[id] || def.states[0]) === st;
+        const previewing = def.states.length > 1 && (app.previewStates[id] || def.states[0]) === state;
         const slot = el('div', {
           class: 'slot' + (entry ? ' filled' : '') + (previewing ? ' previewing' : ''),
           title: entry ? 'Click to preview this state. Drop or double-click to replace.' : 'Click or drop an image',
           onclick: () => {
-            if (def.states.length > 1) { app.previewStates[id] = st; this.renderInspector(); }
+            if (def.states.length > 1) { app.previewStates[id] = state; this.renderInspector(); }
             if (!entry) this.pickFiles({ part: id, state: st });
           },
           ondblclick: () => this.pickFiles({ part: id, state: st }),
         },
           el('div', { class: 'slot-img' }, entry ? PT.Assets.thumb(entry, 128) : el('span', { class: 'plus' }, '+')),
-          el('div', { class: 'slot-label' }, def.states.length > 1 ? def.stateLabels[st] : 'Image'),
+          el('div', { class: 'slot-label' }, def.states.length > 1 ? def.stateLabels[state] : 'Image'),
           el('button', { class: 'slot-clear', title: 'Remove', onclick: (e) => { e.stopPropagation(); PT.Editor.clearSlot(id, st); } }, '×'));
         this.makeDroppable(slot, (files) => PT.Editor.importFiles([files[0]], { part: id, state: st }));
         slots.append(slot);
@@ -279,7 +329,10 @@
         el('div', { class: 'title-row' }, el('h2', {}, def.label), el('span', { class: 'part-sub' }, def.group)),
         this.note(def.hint),
         def.custom ? this.customPartBox(id) : '',
-        this.section('Images', slots,
+        this.section('Images',
+          picker ? el('div', { class: 'row', style: { marginBottom: '8px' } }, picker) : null,
+          slots,
+          expr ? this.note(`These are shown while "${exprs.find((x) => x.id === expr).name}" is on. A slot left empty uses the normal image.`) : null,
           def.states.length > 1 ? this.note('Click a filled slot to preview that state on the stage while editing.') : null,
           el('div', { class: 'row', style: { marginTop: '8px' } },
             el('button', {
@@ -717,6 +770,7 @@
           el('div', { class: 'row', style: { marginTop: '8px' } },
             el('button', { class: 'btn', onclick: () => A.switchTo(A.RANDOM) }, '🎲 Mix now'),
             random ? el('button', { class: 'btn', title: 'Keep the mix on screen as a new avatar', onclick: () => A.keepMix() }, 'Keep this mix') : null)),
+        this.section('Expressions', this.expressionList()),
         this.section('Build a mix', this.mixBuilder()),
         this.section('Next avatar',
           this.note('Steps through your avatars in order.'),

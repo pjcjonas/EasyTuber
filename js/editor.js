@@ -100,7 +100,7 @@
       if (oldPrimState === state) {
         // replaced the frame-defining image
         if (oldPrim.w !== entry.w || oldPrim.h !== entry.h) return this.autoPlace(id, entry, noAlign);
-      } else if (newPrim === entry) {
+      } else if (newPrim === entry && oldPrim) {
         // a new image became the primary: keep the old one visually where it was
         p.px += (entry.w - oldPrim.w) / 2;
         p.py += (entry.h - oldPrim.h) / 2;
@@ -120,8 +120,7 @@
         Object.assign(p, { x: d.x, y: d.y, rot: d.rot, scale: d.scale, px: d.px, py: d.py, flip: false });
       } else if (oldPrimState === state) {
         const np = PT.Assets.primary(id, false);
-        p.px -= (oldPrim.w - np.w) / 2;
-        p.py -= (oldPrim.h - np.h) / 2;
+        if (np && oldPrim) { p.px -= (oldPrim.w - np.w) / 2; p.py -= (oldPrim.h - np.h) / 2; }
       }
       this.resetHistory();
       this.app.changed({ structure: true });
