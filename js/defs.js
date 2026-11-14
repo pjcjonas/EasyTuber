@@ -93,6 +93,7 @@
     onion: true,        // show the first frame faintly while lining up another
     actionSound: 'editor',  // where action sounds play: editor | obs (the stage pages) | off
     actionVolume: 100,      // 0..100, for every action sound
+    updateNotice: true,     // ask GitHub at start-up whether a newer version is out
   };
 
   PT.BG_COLORS = { green: '#00ff00', blue: '#0000ff', magenta: '#ff00ff' };

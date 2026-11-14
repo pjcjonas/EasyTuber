@@ -270,6 +270,16 @@
       } catch (e) { console.warn(e); return { files: [], folder: '' }; }
     },
     /* Show the user's actions folder in the file manager (desktop app only). Throws with the reason. */
+    /* Which version this is; with check, also whether a newer one is out (the app asks GitHub).
+       { current, latest, url, newer }, or null without the desktop app. */
+    async version(check = false) {
+      if (!this.server) return null;
+      try {
+        const r = await fetch('api/update' + (check ? '?check=1' : ''));
+        return r.ok ? await r.json() : null;
+      } catch (e) { return null; }
+    },
+
     /* ---- backups of the avatar file (desktop app) ---- */
     // newest first: [{ id, at, reason, size }]
     async backups() {
