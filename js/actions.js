@@ -10,6 +10,7 @@
 (function (PT) {
   const ID = /^[\w-]{1,40}$/;
   const MIN_MS = 100, MAX_MS = 60000;
+  const MAX_RELEASE = 5000, RELEASE = 300;   // a held action's blend-out when it is stopped, ms
   const ZERO = { ox: 0, oy: 0, rot: 0, sx: 1, sy: 1 };
 
   // small, seedable random number generator: the same seed gives the same numbers on every page
@@ -77,13 +78,18 @@
     /* ---------- defining ---------- */
     define(def) {
       if (!def || typeof def.id !== 'string' || !ID.test(def.id)) throw new Error('Action id must be 1-40 letters, digits, - or _');
-      if (!Number.isFinite(def.duration) || def.duration < MIN_MS || def.duration > MAX_MS) {
+      // a held action (hold: true) has no length: it runs until it is stopped
+      const hold = def.hold === true;
+      if (!hold && (!Number.isFinite(def.duration) || def.duration < MIN_MS || def.duration > MAX_MS)) {
         throw new Error(`Action "${def.id}": duration must be ${MIN_MS} to ${MAX_MS} ms`);
       }
       const clean = {
         ...def,
         label: typeof def.label === 'string' && def.label ? def.label.slice(0, 60) : def.id,
-        duration: Math.round(def.duration),
+        hold,
+        duration: hold ? 0 : Math.round(def.duration),
+        release: hold ? (Number.isFinite(def.release) ? Math.max(0, Math.min(MAX_RELEASE, Math.round(def.release))) : RELEASE) : 0,
+        overlap: hold ? false : !!def.overlap,
         settings: (Array.isArray(def.settings) ? def.settings : []).map(cleanSetting).filter(Boolean),
       };
       this.defs.set(def.id, clean);
@@ -93,7 +99,7 @@
     get(id) { return this.defs.get(id) || null; },
     list() { return [...this.defs.values()]; },
     // what the server needs to check and time Streamer.bot requests
-    catalog() { return this.list().map(({ id, label, duration }) => ({ id, label, duration })); },
+    catalog() { return this.list().map(({ id, label, duration, hold }) => (hold ? { id, label, duration, hold } : { id, label, duration })); },
 
     /* Load every action file the server lists: the app's js/actions/ first, then the user's actions
        folder, so a user file can replace one of the app's. files = [{ src, from }].
@@ -162,10 +168,12 @@
       run.sounds.set(src, null);
       if (!this.soundHere(project)) return false;
       const own = opts && Number.isFinite(opts.volume) ? opts.volume : 1;
+      const loop = !!(opts && opts.loop);
       const all = project && project.stage && Number.isFinite(project.stage.actionVolume) ? project.stage.actionVolume / 100 : 1;
       try {
         const audio = this.makeAudio(src);
         audio.volume = clamp01(own) * clamp01(all);
+        if (loop) { audio.loop = true; run.loops = true; }   // a looping sound stops with the action
         const started = audio.play();
         if (started && started.catch) started.catch((e) => console.warn(`Action sound ${src} did not play: ${e.message}`));
         run.sounds.set(src, audio);
@@ -206,31 +214,56 @@
       const run = { def, t0: now, n: msg.n || null, seed, args: cleanArgs(msg.args), settings: this.settingsFor(project, def), state: {}, random: mulberry32(seed) };
       this.running.push(run);
       this.call(run, 'start', now, project);
+      if (def.hold) this.heldChanged();
       return true;
     },
 
     stop(id) {
       for (const r of this.running) if (!id || r.def.id === id) { this.silence(r); this.call(r, 'end', performance.now()); }
       this.running = id ? this.running.filter((r) => r.def.id !== id) : [];
+      this.heldChanged();
     },
+
+    /* Stop the way a viewer should see it: a held action blends out over its `release` time, any
+       other action stops now. id = one action, or nothing for all of them. */
+    release(id, now = performance.now()) {
+      for (const r of this.running.slice()) {
+        if (id && r.def.id !== id) continue;
+        if (r.def.hold) { if (r.releaseAt == null) r.releaseAt = now; } else {
+          this.silence(r);
+          this.running = this.running.filter((x) => x !== r);
+          this.call(r, 'end', now);
+        }
+      }
+      this.heldChanged();
+    },
+    // is this held action on (and not on its way out)?
+    isHeld(id) { return this.running.some((r) => r.def.id === id && r.def.hold && r.releaseAt == null); },
+    onHeld: null,           // () -> void, set by the editor to relabel its buttons
+    heldChanged() { if (this.onHeld) { try { this.onHeld(); } catch (e) { console.error(e); } } },
 
     get active() { return this.running.length > 0; },
 
     /* the object every hook receives */
     ctx(run, now, project) {
-      const ms = Math.max(0, now - run.t0), d = run.def.duration;
+      const ms = Math.max(0, now - run.t0), hold = run.def.hold;
+      const d = hold ? Infinity : run.def.duration;
+      // a held action: 0 while it is on, then 0 -> 1 over its release time once it is stopped
+      const releasing = hold && run.releaseAt != null ? (run.def.release > 0 ? clamp01((now - run.releaseAt) / run.def.release) : 1) : 0;
       const self = this;
       return {
-        id: run.def.id, ms, duration: d, t: clamp01(ms / d),
+        id: run.def.id, ms, duration: d, t: hold ? 0 : clamp01(ms / d), held: hold, releasing,
         settings: run.settings, state: run.state, random: run.random, seed: run.seed, args: run.args,
         project: project || (PT.App && PT.App.project), ease,
         // 0 -> 1 over the first inMs, 1 -> 0 over the last outMs: blends the action in and out
         envelope(inMs = 150, outMs = 250) {
-          const a = inMs > 0 ? clamp01(ms / inMs) : 1, b = outMs > 0 ? clamp01((d - ms) / outMs) : 1;
+          const a = inMs > 0 ? clamp01(ms / inMs) : 1;
+          if (hold) return Math.min(a, 1 - releasing);   // held: out over the release time
+          const b = outMs > 0 ? clamp01((d - ms) / outMs) : 1;
           return Math.min(a, b);
         },
         // progress through a slice of the run: a.between(0.2, 0.6) is 0 before 20 %, 1 after 60 %
-        between(from, to) { return clamp01((ms / d - from) / Math.max(1e-6, to - from)); },
+        between(from, to) { return hold ? 0 : clamp01((ms / d - from) / Math.max(1e-6, to - from)); },
         // where a point on a part is right now, in stage units. u, v = 0..1 across the part's image
         at(partId, u = 0.5, v = 0.5) { return self.partPoint(partId, u, v); },
         image: (src) => self.image(src),
@@ -255,8 +288,10 @@
        { deltas: extra motion per part, states: eyes/mouth overrides }, or null when nothing plays. */
     update(now, project) {
       for (const r of this.running.slice()) {
-        if (now - r.t0 >= r.def.duration) {
+        const over = r.def.hold ? r.releaseAt != null && now - r.releaseAt >= r.def.release : now - r.t0 >= r.def.duration;
+        if (over) {
           this.running = this.running.filter((x) => x !== r);
+          if (r.def.hold || r.loops) this.silence(r);   // a held action's sounds, and looping ones, end with it
           this.call(r, 'end', now, project);
         }
       }

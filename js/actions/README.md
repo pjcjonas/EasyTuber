@@ -31,6 +31,7 @@ PT.Actions.define({
   label: 'Wave',            // shown in the Actions tab and the Streamer.bot list
   duration: 1800,           // ms, 100 to 60000. Sequences wait this long before the next step.
   overlap: false,           // true: playing it again while it runs adds a second copy instead of restarting
+  // hold: true,            // instead of a duration: stays on until it is turned off (see Held actions)
 
   // optional: sliders and checkboxes in the Actions tab, saved with the project, read as a.settings.<key>
   settings: [
@@ -79,6 +80,40 @@ PT.Actions.define({
 
 If a hook throws, that action stops and the editor shows a toast. The avatar keeps running.
 
+### Held actions
+
+An ordinary action plays for its `duration` and ends. A **held** action stays on until it is turned off: a "be right back" pose, a hat, a mood.
+
+```js
+PT.Actions.define({
+  id: 'lean',
+  label: 'Lean back',
+  hold: true,               // no duration: it runs until it is stopped
+  release: 400,             // ms to blend out once it is stopped (0 to 5000, 300 if left out)
+
+  pose(a) { return { torso: { rot: -8 * a.envelope(300) } }; },
+});
+```
+
+Inside a held action:
+
+| | |
+|---|---|
+| `a.held` | `true` |
+| `a.ms` | how long it has been on |
+| `a.envelope(inMs)` | 0 → 1 as it comes on, 1 → 0 over `release` once it is stopped. Multiply your motion by it and both ends blend. |
+| `a.releasing` | 0 while it is on, then 0 → 1 over `release` |
+| `a.t`, `a.between()` | always 0, and `a.duration` is `Infinity`: there is no length to be part-way through |
+| `a.sound(src, { loop: true })` | a sound that repeats until the action ends |
+
+Turning it on and off:
+
+- In the Actions tab its button says **▶ Turn on** / **■ Turn off**. A hotkey does the same.
+- From Streamer.bot, `…?action=lean` turns it on, or off if it is on. `…?action=lean&hold=on` only turns it on and `&hold=off` only turns it off, which is what you want when two different triggers start and end it.
+- `…?stop=lean` stops one action. `…?stop=all` stops every action, held or not, and a sequence that is waiting. The tab's **■ Stop all actions** does the same.
+- A stage page that loads while it is on (OBS refreshing its source) joins in.
+- In a sequence, a held step doesn't make the next step wait.
+
 ### Part ids
 
 `torso neck face eyes mouth hairFront hairBack armLUpper armLLower armRUpper armRLower`
@@ -113,7 +148,7 @@ Test button / hotkey / Streamer.bot URL
   → PT.Actions.play() in the editor, the stage window and OBS (n stops a double play)
 ```
 
-The Streamer.bot URL is `http://127.0.0.1:8777/api/streamerbot?action=<id>`. For a sequence, use `?sequence=a,b,next&startDelay=1&delay=2.5`, which runs up to 8 steps. Steps can also be `next`, `random` or `avatar:<id>`. Send the header `X-EasyTuber-Control: streamerbot`.
+The Streamer.bot URL is `http://127.0.0.1:8777/api/streamerbot?action=<id>`. `?stop=<id>` stops one action and `?stop=all` stops everything. For a sequence, use `?sequence=a,b,next&startDelay=1&delay=2.5`, which runs up to 8 steps. Steps can also be `next`, `random` or `avatar:<id>`. Send the header `X-EasyTuber-Control: streamerbot`.
 
 ### Values from Streamer.bot
 

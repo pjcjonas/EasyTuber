@@ -73,6 +73,7 @@
         else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.t = performance.now(); }
         else if (msg.type === 'blink') this.animator.blink();
         else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
+        else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
         else if (msg.type === 'reload-actions') location.reload();   // the editor is loading its action files again
         else if (msg.type === 'switch-out') {
           if (msg.test) PT.Transition.play();
@@ -168,7 +169,11 @@
       PT.Actions.onError = (def, e) => PT.toast(`Action "${def.label}" stopped with an error: ${e.message}`, 'error', 8000);
       for (const f of this.actionLoad.failed) PT.toast(`Action file ${f.src.split('/').pop()} was skipped: ${f.message}`, 'error', 10000);
       PT.Storage.setActions(PT.Actions.catalog());
-      PT.Storage.onLive((msg) => { if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project); });
+      PT.Storage.onLive((msg) => {
+        if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
+        else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
+      });
+      PT.Actions.onHeld = () => PT.Panels.syncHeld();
 
       // global hotkeys: registered by the desktop app, delivered here even while you're in a game
       PT.Storage.onHotkey((action) => PT.Avatars.handle(action));
@@ -206,7 +211,8 @@
     /* Play an action here, in the stage window and in OBS. In the desktop app it goes through the
        same URL Streamer.bot uses, so a working Test means a working Streamer.bot setup. */
     async playAction(id) {
-      if (!PT.Actions.get(id)) return;
+      const def = PT.Actions.get(id);
+      if (!def) return;
       if (this.mode === 'edit') this.setMode('live');   // Edit shows the rest pose, without motion
       if (PT.Storage.server) {
         const url = new URL('api/streamerbot', location.href);
@@ -214,9 +220,27 @@
         try { await PT.Storage.runActionUrl(url); } catch (e) { PT.toast('Could not play the action: ' + e.message, 'error'); }
         return;
       }
+      // without the desktop app: this page and the stage window only. A held action is a switch.
+      if (def.hold && PT.Actions.isHeld(id)) {
+        PT.Actions.release(id);
+        PT.Storage.post({ type: 'action-stop', id });
+        return;
+      }
       const msg = PT.Actions.newPlay(id);
       PT.Actions.play(id, msg, this.project);
       PT.Storage.post(msg);
+    },
+
+    // stop every action, held or not, on every page (and a sequence that is waiting)
+    async stopActions() {
+      if (PT.Storage.server) {
+        const url = new URL('api/streamerbot', location.href);
+        url.searchParams.set('stop', 'all');
+        try { await PT.Storage.runActionUrl(url); } catch (e) { PT.toast('Could not stop the actions: ' + e.message, 'error'); }
+        return;
+      }
+      PT.Actions.release();
+      PT.Storage.post({ type: 'action-stop' });
     },
 
     setMode(mode) {

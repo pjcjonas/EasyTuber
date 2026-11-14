@@ -644,10 +644,22 @@
       return el('div', { class: 'avatar-row action-row' },
         el('div', { class: 'av-top' },
           el('span', { class: 'action-name', title: 'id: ' + def.id }, def.label),
-          el('span', { class: 'action-len' }, (def.duration / 1000).toFixed(1) + ' s'),
-          el('button', { class: 'btn small', title: 'Play it here, in the stage window and in OBS', onclick: () => app.playAction(def.id) }, '▶ Test')),
+          el('span', { class: 'action-len' }, def.hold ? 'held' : (def.duration / 1000).toFixed(1) + ' s'),
+          def.hold
+            ? el('button', { class: 'btn small', 'data-held': def.id, title: 'Turn it on or off here, in the stage window and in OBS', onclick: () => app.playAction(def.id) },
+              PT.Actions.isHeld(def.id) ? '■ Turn off' : '▶ Turn on')
+            : el('button', { class: 'btn small', title: 'Play it here, in the stage window and in OBS', onclick: () => app.playAction(def.id) }, '▶ Test')),
         el('div', { class: 'av-bottom' }, this.hotkeyRow('action:' + def.id, (p.actions[def.id] || {}).hotkey || '')),
         settings.length ? el('details', { class: 'action-settings' }, el('summary', {}, 'Settings'), ...settings) : null);
+    },
+
+    // a held action was turned on or off (here, by a hotkey or by Streamer.bot): relabel its button
+    syncHeld() {
+      for (const b of document.querySelectorAll('#tab-actions button[data-held]')) {
+        const on = PT.Actions.isHeld(b.getAttribute('data-held'));
+        b.textContent = on ? '■ Turn off' : '▶ Turn on';
+        b.classList.toggle('on', on);
+      }
     },
 
     // where action sounds play (each sound must be heard once), and how loud
@@ -730,6 +742,7 @@
         if (this.app.mode === 'edit') this.app.setMode('live');
         try { await PT.Storage.runActionUrl(u); PT.toast(useSeq ? 'Sequence started' : 'Playing ' + labels.get(pick.value)); } catch (e) { PT.toast('Could not run it: ' + e.message, 'error'); }
       };
+      const heldNote = el('p', { class: 'note' });
       const add = el('button', { class: 'btn small', onclick: () => { seq.push(pick.value); update(); } }, 'Add to sequence');
       const testOne = el('button', { class: 'btn small', onclick: () => test(false) }, '▶ Test');
       const testSeq = el('button', { class: 'btn small', onclick: () => test(true) }, '▶ Test sequence');
@@ -738,6 +751,14 @@
 
       const update = () => {
         const has = seq.length > 0;
+        const picked = PT.Actions.get(pick.value);
+        heldNote.hidden = has || !(picked && picked.hold);
+        if (!heldNote.hidden) {
+          const base = new URL('/api/streamerbot', location.origin);
+          base.hostname = '127.0.0.1';
+          heldNote.textContent = `"${picked.label}" is a held action: this address turns it on, and off again if it is on. `
+            + `To only turn it on, add &hold=on. To turn it off: ${base.href}?stop=${picked.id}`;
+        }
         const badTiming = has && fields.some((f) => !f.input.validity.valid), invalid = badTiming || !valuesOk();
         url.value = invalid ? '' : build(has);
         copy.disabled = testSeq.disabled = testOne.disabled = invalid;
@@ -762,6 +783,7 @@
         this.note('For actions that use them, such as a name to show. Streamer.bot fills in its own variables, like %user%.'),
         badValues,
         el('div', { class: 'obs-row', style: { marginTop: '8px' } }, url, copy),
+        heldNote,
         el('ol', { class: 'help-list' },
           el('li', {}, 'In Streamer.bot on this computer, add a "Fetch URL" sub-action and paste the URL.'),
           el('li', {}, 'Add the header X-EasyTuber-Control with the value streamerbot.'),
@@ -799,6 +821,8 @@
                 ? 'Each one is a single file. Put it in the actions folder and click Reload actions.'
                 : 'Each one is a single file. Actions load in the EASY-TUBER desktop app.')),
           defs.length ? this.note('Test switches the editor to Live. OBS and the stage window play it too.') : null,
+          defs.length ? el('div', { class: 'row' },
+            el('button', { class: 'btn small', title: 'Stop every action that is playing or held on, and a sequence that is waiting', onclick: () => this.app.stopActions() }, '■ Stop all actions')) : null,
           ...skipped.map((f) => el('p', { class: 'note warn-text' }, `${f.src.split('/').pop()} was skipped: ${f.message}`)),
           server ? folder : null,
           server ? this.note('Only add action files you trust: an action is a small program that runs inside EASY-TUBER.') : null),
