@@ -138,6 +138,20 @@ Draw your character in your art program as separate layers and export each layer
 
 A part you've uploaded says **uploaded** in green in the list. Parts still using the placeholder say *empty, using placeholder*. You can turn the placeholder off in **Stage → Show placeholder art for empty parts**.
 
+### From a Photoshop file
+
+Drop a `.psd` on **"Drop all your layers here"** (or on the stage). A list shows every layer and the part it will go to:
+
+- Layers are matched by their names, like files: `face`, `eyes closed`, `arm left upper`.
+- A layer with a plain name such as `open`, `closed` or `Layer 3` takes its part from the group it is in: `open` in a group called `Eyes` is the open eyes.
+- A layer that matches no part is offered as **a new part of its own**, attached to the part its group stands for (a `Hat` in a group called `Head` hangs from the face).
+- Hidden layers are listed too, since closed eyes and open mouths are usually hidden. A hidden layer that matches nothing is left out.
+- Several layers sent to the same part are put together into one image.
+
+Change any choice in the list, then click **Import**. Every image is made at the size of the whole document, so the parts sit exactly where they do in Photoshop, and they are stacked in the document's order. The images go into the avatar you have selected and replace the images those parts had. A document larger than 4096 pixels is scaled down to that.
+
+Layer effects, blend modes, masks and adjustment layers are not applied; flatten those into the layer first. Clip Studio Paint, Krita, GIMP and Procreate can all save `.psd`.
+
 ### Your own parts
 
 The skeleton has 11 parts. You can add your own: a hat, glasses, ears, a tail, a hand that is separate from the forearm, a prop.
@@ -456,6 +470,7 @@ index.html          page shell (editor; ?stage=1 = clean capture page for OBS; &
 css/style.css
 js/intro.js         the intro overlay
 js/defs.js          parts, hierarchy, the user's own parts (applyRig), default layout and settings, filename routing
+js/psd.js           PSD import: layers to parts (the file is read by js/vendor/ag-psd.js, MIT)
 js/animator.js      breathing, blinking, lip-sync, head/arm/hair motion
 js/avatars.js       avatar layouts, global hotkeys, random mix, switching
 js/transition.js    the drop-out / climb-in switch animation

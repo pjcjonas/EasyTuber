@@ -129,6 +129,9 @@
 
     // files: FileList/array. target: optional {part, state}
     async importFiles(files, target = null) {
+      // a Photoshop file: its layers are the parts (see psd.js)
+      const psd = Array.from(files).find((f) => /\.psd$/i.test(f.name));
+      if (psd) return PT.Psd.open(psd);
       files = Array.from(files).filter((f) => /^image\//.test(f.type) || /\.(png|webp|gif|jpe?g)$/i.test(f.name));
       // files named like "eyes_sheet.png" / "mouth-sprites.png" open the sprite sheet cropper
       const sheets = files.filter((f) => /sheet|sprite|atlas/i.test(f.name));
