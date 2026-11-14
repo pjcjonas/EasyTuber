@@ -114,10 +114,13 @@
         const url = location.href.split('?')[0].split('#')[0] + '?stage=1';
         window.open(url, 'easytuber-stage', 'width=960,height=540');
       };
-      $('btnExport').onclick = () => {
+      $('btnExport').onclick = async () => {
         const name = (this.project.name || 'easy-tuber').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        PT.download(`${name}.easytuber.json`, JSON.stringify(this.project));
-        PT.toast('Saved. Use "Open file" to load it again, on any computer.');
+        try {
+          // one file with the pictures inside it, so it opens on any computer
+          PT.download(`${name}.easytuber.json`, JSON.stringify(await PT.Storage.inlined(this.project)));
+          PT.toast('Saved. Use "Open file" to load it again, on any computer.');
+        } catch (e) { PT.toast('Could not save the file: ' + e.message, 'error', 8000); }
       };
       $('btnSheet').onclick = () => PT.SheetEditor.pick(this.selected && this.selected !== 'root' && PT.PART[this.selected].states.length > 1 ? this.selected : null);
       $('btnImport').onclick = () => $('importInput').click();
@@ -127,6 +130,8 @@
         try {
           const data = JSON.parse(await f.text());
           if (!data || !data.parts) throw new Error('not an EASY-TUBER file');
+          const missing = await PT.Storage.missingPictures(data);
+          if (missing) throw new Error(`${missing} of its pictures are not in the file. It looks like the app's own working copy from another computer: use "Save file" there and open that file instead.`);
           await this.loadProject(PT.normalizeProject(data));
           PT.toast(`Loaded ${f.name}`);
         } catch (err) { PT.toast('Could not open file: ' + err.message, 'error'); }

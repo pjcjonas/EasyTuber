@@ -1,8 +1,11 @@
 /* Persistence.
-   - The whole project (including images as data URLs) is saved in IndexedDB (this browser only)
-     AND, in the desktop app, in avatar.easytuber.json in the app-data folder.
-     The file is what lets OBS's Browser Source (which has its own, empty browser storage)
-     show your avatar.
+   - The project is saved in IndexedDB (this browser only) AND, in the desktop app, in
+     avatar.easytuber.json in the app-data folder. The file is what lets OBS's Browser Source
+     (which has its own, empty browser storage) show your avatar.
+   - In the desktop app the pictures are not in the project: each one is a file in the images
+     folder beside the avatar file, and the project says "img:<sha-256 of the picture>". So a save
+     is small however much art there is. Without the app (browser only) pictures stay in the
+     project as data URLs. "Save file" always writes one file with the pictures inside.
    - Live messages (mic level, blink, "project changed") reach stage pages through a
      BroadcastChannel (same browser) and through the server's event stream (any browser, OBS). */
 (function (PT) {
@@ -83,7 +86,95 @@
       return { project: loc, pushToServer: !!(loc && this.server) };
     },
 
+    /* ---- pictures as files (desktop app) ---- */
+    _refs: new Map(),   // data URL -> "img:<hash>", for pictures already stored this session
+    _storeWarned: false,
+
+    // every place in a project that holds a picture: [object, key] pairs
+    pictureSlots(project) {
+      const slots = [];
+      const look = (l) => {
+        if (!l || typeof l !== 'object') return;
+        for (const part of Object.values(l.parts || {})) for (const st of Object.keys((part && part.images) || {})) slots.push([part.images, st]);
+        for (const sheet of Array.isArray(l.sheets) ? l.sheets : []) if (sheet) slots.push([sheet, 'url']);
+      };
+      look(project);
+      for (const a of (project && project.avatars) || []) look(a && a.look);
+      return slots;
+    },
+
+    // store one picture with the app; returns its "img:<hash>", or null if that didn't work
+    async storePicture(dataUrl) {
+      if (this._refs.has(dataUrl)) return this._refs.get(dataUrl);
+      const bytes = await (await fetch(dataUrl)).arrayBuffer();
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+      const hash = Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+      const r = await fetch('api/image/' + hash, { method: 'PUT', body: bytes });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);
+      const ref = 'img:' + hash;
+      this._refs.set(dataUrl, ref);
+      PT.Assets.aliases.set(ref, dataUrl);
+      return ref;
+    },
+
+    /* Move every picture that is still inside the project (a new upload, a crop, an opened file)
+       out to the app's images folder, leaving "img:<hash>" in its place. A picture that can't be
+       stored stays in the project, so nothing is lost. Returns how many were moved. */
+    async externalize(project) {
+      if (!this.server || !window.crypto || !crypto.subtle) return 0;
+      let moved = 0;
+      for (const [obj, key] of this.pictureSlots(project)) {
+        const url = obj[key];
+        if (typeof url !== 'string' || !url.startsWith('data:image/')) continue;
+        try {
+          const ref = await this.storePicture(url);
+          if (obj[key] === url) { obj[key] = ref; moved++; }   // unless it changed while we waited
+        } catch (e) {
+          console.warn(e);
+          if (!this._storeWarned) {
+            this._storeWarned = true;
+            PT.toast('Could not store a picture as a file: ' + e.message + '. It is kept inside the avatar file instead.', 'warn', 8000);
+          }
+        }
+      }
+      return moved;
+    },
+
+    /* A copy of the project with every picture inside it again, as "Save file" writes it: one
+       file that opens on any computer. Throws if a picture can't be read. */
+    async inlined(project) {
+      const copy = PT.deepClone(project);
+      const cache = new Map();
+      const read = async (ref) => {
+        if (!cache.has(ref)) {
+          cache.set(ref, (async () => {
+            const r = await fetch(PT.imageSrc(ref));
+            if (!r.ok) throw new Error('a picture is missing from the images folder');
+            return PT.readFileAsDataURL(await r.blob());
+          })());
+        }
+        return cache.get(ref);
+      };
+      for (const [obj, key] of this.pictureSlots(copy)) if (PT.isImageRef(obj[key])) obj[key] = await read(obj[key]);
+      return copy;
+    },
+
+    /* How many of a project's pictures are files this app doesn't have. A file made with "Save file"
+       has its pictures inside it, so this is 0; the app's own working copy from another computer
+       has only their names. */
+    async missingPictures(project) {
+      const refs = new Set(this.pictureSlots(project).map(([obj, key]) => obj[key]).filter(PT.isImageRef));
+      let missing = 0;
+      for (const ref of refs) {
+        let ok = false;
+        try { ok = this.server && (await fetch(PT.imageSrc(ref), { method: 'GET' })).ok; } catch (e) { ok = false; }
+        if (!ok) missing++;
+      }
+      return missing;
+    },
+
     async save(project) {
+      await this.externalize(project);
       project.savedAt = Date.now();
       try {
         await tx('readwrite', (s) => s.put(project, KEY));

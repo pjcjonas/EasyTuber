@@ -96,12 +96,17 @@ window.PT = window.PT || {};
     });
   }
 
+  /* Where a picture in the avatar is: "img:<hash>" is a file the app keeps (see storage.js),
+     anything else (a data URL, a path) is used as it is. */
+  const isImageRef = (v) => typeof v === 'string' && /^img:[0-9a-f]{64}$/.test(v);
+  const imageSrc = (v) => (isImageRef(v) ? 'api/image/' + v.slice(4) : v);
+
   function loadImage(src) {
     return new Promise((res, rej) => {
       const img = new Image();
       img.onload = () => res(img);
       img.onerror = () => rej(new Error('Could not load image'));
-      img.src = src;
+      img.src = imageSrc(src);
     });
   }
 
@@ -113,5 +118,5 @@ window.PT = window.PT || {};
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
-  Object.assign(PT, { M, DEG, clamp, lerp, approach, Spring, el, toast, debounce, deepClone, readFileAsDataURL, loadImage, download });
+  Object.assign(PT, { M, DEG, clamp, lerp, approach, Spring, el, toast, debounce, deepClone, readFileAsDataURL, loadImage, isImageRef, imageSrc, download });
 })(window.PT);

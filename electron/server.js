@@ -1,12 +1,15 @@
 /* EASY-TUBER local server (runs inside the Electron main process).
    - Serves the app on http://localhost:<port>/ so OBS can load it as a Browser Source.
    - Keeps the avatar in a file, so OBS (which has its own browser storage) sees the same avatar.
+     The pictures are files of their own in an images folder beside it (see images.js).
    - Relays the editor's mic level / blinks to stage pages with Server-Sent Events.
    - Passes hotkey and virtual-camera requests from the editor on to the desktop app.
    - Lists the action files (the app's js/actions/ and the user's actions folder) for the pages to load. */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const images = require('./images');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -120,6 +123,7 @@ function parseSequences(list) {
 }
 
 function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null }) {
+  const imagesDir = path.join(path.dirname(saveFile), 'images');   // the avatar's pictures: <sha-256>, no extension
   let version = 0;
   const listeners = new Set();
   let catalog = new Map();       // actions the editor has loaded
@@ -226,11 +230,11 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
     res.end(body);
   };
 
-  const readBody = (req) => new Promise((resolve, reject) => {
+  const readBody = (req, max = MAX_BODY) => new Promise((resolve, reject) => {
     const chunks = []; let size = 0;
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new Error('too large')); req.destroy(); return; }
+      if (size > max) { reject(new Error('too large')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => resolve(Buffer.concat(chunks)));
@@ -279,6 +283,30 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return sendJson(res, 403, { error: 'Use a local URL' });
       }
       if (urlPath === '/api/ping' && req.method === 'GET') return sendJson(res, 200, { ok: true, version });
+
+      /* One picture of the avatar, named by the SHA-256 of its bytes (the avatar file says "img:<hash>").
+         PUT stores it if the bytes match the name; GET sends it. A name never changes what it holds,
+         so pages may keep it for good. */
+      const image = /^\/api\/image\/([0-9a-f]{64})$/.exec(urlPath);
+      if (image && req.method === 'PUT') {
+        const body = await readBody(req, images.MAX_BYTES);
+        if (crypto.createHash('sha256').update(body).digest('hex') !== image[1]) return sendJson(res, 400, { error: 'the picture does not match its name' });
+        if (!images.typeOf(body)) return sendJson(res, 415, { error: 'not a picture EASY-TUBER can show' });
+        await images.store(imagesDir, image[1], body);
+        return sendJson(res, 200, { ok: true });
+      }
+      if (image && req.method === 'GET') {
+        const file = path.join(imagesDir, image[1]);
+        let head;
+        try { head = await images.head(file); } catch (e) { return sendJson(res, 404, { error: 'no such picture' }); }
+        res.writeHead(200, {
+          'Content-Type': head.type || 'application/octet-stream', 'Content-Length': head.size,
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          // a picture is only ever a picture: opened on its own it may not run anything (an SVG could)
+          'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        });
+        return fs.createReadStream(file).pipe(res);
+      }
 
       if (urlPath === '/api/project') {
         if (req.method === 'GET') {
@@ -473,16 +501,25 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
 
   server.on('close', () => clearTimeout(sequenceTimer));
 
-  return new Promise((resolve, reject) => {
+  /* Before the first page asks for the avatar: move pictures still inside the avatar file (files
+     from before v1.9) out into the images folder, then clear out pictures nothing has used for a
+     month. Neither may stop the app from starting. */
+  const prepare = images.migrate(saveFile, imagesDir)
+    .then((moved) => { if (moved.count) console.log(`Moved ${moved.count} pictures out of the avatar file (the old file is kept as ${path.basename(moved.backup)})`); })
+    .catch((e) => console.error('Could not move the pictures out of the avatar file; it is left as it was.', e))
+    .then(() => images.sweep(saveFile, imagesDir))
+    .catch((e) => console.error('Could not tidy the images folder.', e));
+
+  return prepare.then(() => new Promise((resolve, reject) => {
     let p = port;
     const attempt = () => {
       server.once('error', (err) => {
         if (err.code === 'EADDRINUSE' && p < port + tries - 1) { p++; attempt(); } else reject(err);
       });
-      server.listen(p, '127.0.0.1', () => resolve({ port: p, server, broadcast, trigger, close: () => server.close() }));
+      server.listen(p, '127.0.0.1', () => resolve({ port: p, server, broadcast, trigger, imagesDir, close: () => server.close() }));
     };
     attempt();
-  });
+  }));
 }
 
 module.exports = { start, validBinding, actionArgs };
