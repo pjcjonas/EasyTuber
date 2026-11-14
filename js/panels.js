@@ -263,6 +263,13 @@
       return wrap;
     },
 
+    // "Version 1.2.3", filled in once the app has answered
+    versionLine() {
+      const line = this.note('');
+      PT.Storage.version().then((v) => { if (v && v.current) line.textContent = 'This is version ' + v.current + '.'; else line.remove(); });
+      return line;
+    },
+
     // The backups the app keeps of the avatar file, each with a Restore button
     backupList() {
       const wrap = el('div', {}, this.note('Looking…'));
@@ -508,6 +515,9 @@
           this.check('Dragging a part moves the parts attached to it', () => st.moveChildren, (v) => { st.moveChildren = v; app.changed({ settings: true }); },
             'e.g. moving the face also moves eyes, mouth and hair'),
           this.check('Onion skin when lining up eye / mouth frames', () => st.onion, (v) => { st.onion = v; app.changed({ settings: true }); })),
+        PT.Storage.server ? this.section('Updates', this.versionLine(),
+          this.check('Tell me when a new version is out', () => st.updateNotice !== false, (v) => { st.updateNotice = v; app.changed({ settings: true }); },
+            'Asks github.com once when the app starts. Nothing about you or your avatar is sent.')) : '',
         this.section('Sprite sheets', this.sheetList()),
         this.section('Draw order (top = front)', list),
         this.section('Streaming with OBS', this.obsUrl(), el('ol', { class: 'help-list' },

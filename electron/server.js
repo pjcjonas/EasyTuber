@@ -11,6 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const images = require('./images');
 const backups = require('./backups');
+const update = require('./update');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -123,7 +124,10 @@ function parseSequences(list) {
   return out;
 }
 
-function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null }) {
+function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null, latestRelease = update.latest }) {
+  let appVersion = '';
+  try { appVersion = String(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || ''); } catch (e) { /* unknown */ }
+  let release = null, releaseAt = 0;   // what GitHub last said, and when it was asked
   const imagesDir = path.join(path.dirname(saveFile), 'images');   // the avatar's pictures: <sha-256>, no extension
   let version = 0;
   const listeners = new Set();
@@ -340,6 +344,22 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
           files: [...app.map((f) => ({ src: 'js/actions/' + f, from: 'app' })), ...user.map((f) => ({ src: USER_ACTIONS + '/' + f, from: 'user' }))],
           folder: actionsDir || '',
         });
+      }
+
+      /* Which version this is and, with ?check=1, whether a newer one is out (see update.js).
+         GitHub is asked at most once every six hours, and only when a page asks for the check. */
+      if (urlPath === '/api/update' && req.method === 'GET') {
+        const out = { current: appVersion, latest: null, url: update.PAGE, newer: false };
+        if (new URL(req.url, 'http://x').searchParams.get('check') === '1') {
+          if (!release || Date.now() - releaseAt > 6 * 3600 * 1000) { release = Promise.resolve().then(() => latestRelease()).catch(() => null); releaseAt = Date.now(); }
+          const found = await release;
+          if (found && update.parse(found.version)) {
+            out.latest = found.version;
+            if (typeof found.url === 'string' && found.url.startsWith(update.PAGE)) out.url = found.url;
+            out.newer = update.newer(found.version, appVersion);
+          } else release = null;   // didn't work: ask again next time
+        }
+        return sendJson(res, 200, out);
       }
 
       /* Backups of the avatar file (see backups.js). GET lists them, POST makes one now (before a

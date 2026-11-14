@@ -105,6 +105,7 @@
       if (/Electron/.test(navigator.userAgent) && location.port !== '8777') {
         PT.toast(`Port 8777 was busy (another copy or an old start.bat?). The OBS URL is now ${location.origin}/?stage=1`, 'error', 12000);
       }
+      this.checkForUpdate();
       // while this tab is hidden the main loop is paused: keep sending the mic level to the stage
       PT.Audio.onTick = (dt) => {
         if (performance.now() - this.last < 200) return;
@@ -201,6 +202,15 @@
       if (!window.isSecureContext) {
         PT.toast('Microphone needs a secure page. Close this tab, run start.bat and use the localhost address it opens.', 'warn', 10000);
       }
+    },
+
+    /* Once, when the editor starts: say so if a newer version is out. Off with the Stage tab setting. */
+    async checkForUpdate() {
+      if (this.stageMode || !PT.Storage.server || this.project.stage.updateNotice === false) return;
+      const v = await PT.Storage.version(true);
+      if (!v || !v.newer || !/^https:\/\/github\.com\//.test(v.url)) return;
+      PT.toast(PT.el('span', {}, `EASY-TUBER ${v.latest} is out (you have ${v.current}). `,
+        PT.el('a', { href: v.url, target: '_blank', rel: 'noopener' }, 'Get it')), '', 15000);
     },
 
     /* Keep a backup of the avatar as it is right now, before something replaces it.

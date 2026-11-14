@@ -75,6 +75,8 @@ Not sure which Mac you have? Apple menu â†’ **About This Mac**. "Chip: Apple Mâ€
 
 **The intro.** Each time the app starts it plays a short intro. Click anywhere or press any key to skip it.
 
+**Updates.** When a newer version is out, the app says so at start-up, with a link to the download. For this it asks github.com once; nothing about you or your avatar is sent. You can turn it off in the **Stage** tab under **Updates**, which also shows the version you have.
+
 ![The intro](docs/screenshots/intro.png)
 
 ---
@@ -435,6 +437,7 @@ electron/main.js    desktop app window, mic permission, stage window
 electron/server.js  local server: serves the app to OBS, saves the avatar file, relays the mic, lists and plays actions
 electron/images.js  the avatar's pictures as files: storing, moving them out of an old avatar file, clearing unused ones
 electron/backups.js the newest 5 copies of the avatar file: at each start, before a reset or a restore
+electron/update.js  asks GitHub for the latest release, for the "new version" notice
 electron/vcam.js    virtual camera: sends frames to the OBS Virtual Camera driver (Windows and macOS, through koffi)
 build/              logo, icons, the macOS microphone and camera permission text
 media/intro.mp4     the start-up intro
