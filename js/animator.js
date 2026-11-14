@@ -27,6 +27,7 @@
       this.blinkSeq = null; this.blinkStep = 0; this.blinkTimer = 0;
       this.nextBlink = rnd(1.5, 4);
 
+      this.lookX = new Spring(70, 15); this.lookY = new Spring(70, 15);   // following the mouse, eased
       this.custom = {};   // custom part id -> { spring, prev }: follow-through for the user's own parts
 
       // mouth
@@ -40,7 +41,8 @@
       this.blinkSeq = seq; this.blinkStep = 0; this.blinkTimer = 0;
     }
 
-    update(dt, level, motion, mic) {
+    // look: where the mouse pointer is on the screen, { x, y } in -1..1 (null = straight ahead)
+    update(dt, level, motion, mic, look = null) {
       dt = Math.min(dt, 0.1);
       const t = (this.t += dt);
       const m = motion;
@@ -97,8 +99,13 @@
       const idle = (Math.sin(t * 0.53) * 1.1 + Math.sin(t * 0.29 + 1.3) * 0.7) * m.idleSway;
       const tilt = this.headTilt.step(v * m.headTilt * 6 * Math.sin(t * 1.7) + v * m.headTilt * 1.5, dt);
       const headY = this.headY.step(-v * 10 * m.headBob - b * 1.5 * A, dt);
-      const headRot = idle + tilt;
-      const face = { ox: Math.sin(t * 0.41) * 1.5 * m.idleSway, oy: headY, rot: headRot, sx: 1, sy: 1 };
+      /* ---------- following the mouse ---------- */
+      const EF = m.eyesFollow || 0, HF = m.headFollow || 0;
+      const gx = this.lookX.step(EF || HF ? clamp(look ? +look.x || 0 : 0, -1, 1) : 0, dt);
+      const gy = this.lookY.step(EF || HF ? clamp(look ? +look.y || 0 : 0, -1, 1) : 0, dt);
+
+      const headRot = idle + tilt + gx * 5 * HF;   // the head turns towards the pointer
+      const face = { ox: Math.sin(t * 0.41) * 1.5 * m.idleSway + gx * 6 * HF, oy: headY + gy * 4 * HF, rot: headRot, sx: 1, sy: 1 };
 
       // head velocities drive the hair
       const rotVel = (headRot - this.prevHeadRot) / Math.max(dt, 1e-3);
@@ -116,7 +123,7 @@
       const hairBack = { ox: 0, oy: 0, rot: clamp(hb, -8, 8), sx: 1, sy: 1 + hs };
 
       /* ---------- face features ---------- */
-      const eyes = { ox: 0, oy: 0, rot: 0, sx: 1, sy: 1 };
+      const eyes = { ox: gx * 7 * EF, oy: gy * 4 * EF, rot: 0, sx: 1, sy: 1 };
       const mouthSq = this.mouth === 'open' ? 1 + clamp((level - openThr) * 0.5, 0, 0.15) : 1;
       const mouth = { ox: 0, oy: 0, rot: 0, sx: 1, sy: mouthSq };
 

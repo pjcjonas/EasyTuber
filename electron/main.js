@@ -1,5 +1,6 @@
 /* EASY-TUBER desktop app (Electron main process). */
-const { app, BrowserWindow, Menu, session, shell, dialog, globalShortcut, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, session, shell, dialog, globalShortcut, systemPreferences, screen } = require('electron');
+const look = require('./look');
 const path = require('path');
 const fs = require('fs');
 const { start } = require('./server');
@@ -24,7 +25,14 @@ function setHotkeys(bindings) {
     return { accelerator, ok };
   });
 }
-app.on('will-quit', () => { globalShortcut.unregisterAll(); stopCamera(); });
+app.on('will-quit', () => { globalShortcut.unregisterAll(); stopCamera(); pointer.set(false); });
+
+/* Eyes / head follow the mouse: while the editor asks for it, tell the pages where the pointer is
+   on its screen (see look.js). */
+const pointer = look.watcher(
+  () => { const point = screen.getCursorScreenPoint(); return { point, bounds: screen.getDisplayNearestPoint(point).bounds }; },
+  (pos) => { if (srv) srv.broadcast('live', { type: 'look', x: pos.x, y: pos.y }); },
+);
 
 /* Virtual camera: a hidden copy of the stage page is drawn off screen, and its frames are sent
    to the OBS Virtual Camera driver (see vcam.js). The page is the same one OBS loads, so the
@@ -129,7 +137,7 @@ async function boot() {
     return shell.openPath(actionsDir);   // '' when it opened, or the reason it didn't
   };
 
-  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys, onVcam: setCamera, actionsDir, onOpenFolder: openFolder });
+  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys, onVcam: setCamera, actionsDir, onOpenFolder: openFolder, onLook: (on) => pointer.set(on) });
   origin = `http://localhost:${srv.port}`;
   createMainWindow();
 }

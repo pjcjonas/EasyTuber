@@ -245,8 +245,11 @@ All the motion is built in. The **Motion** tab only sets how strong each one is 
 | **Blinking** | Every (seconds between blinks), Double blink (how often a blink comes in twos), **Blink now** |
 | **Talking** | Head bob (hops on each syllable), Head tilt (rocks side to side), Body bounce, Gestures (arms move when you talk) |
 | **Secondary motion** | Arm sway (idle arm movement), Hair physics (how much the hair swings after the head moves) |
+| **Follow the mouse** | Eyes follow mouse, Head follows mouse: the avatar looks towards your mouse pointer, wherever it is on the screen |
 
-**Reset motion to defaults** puts everything back to 1.
+**Follow the mouse** is off (0) until you turn a slider up. While it is on, the app reads where the pointer is on your screen; it reads nothing else, keeps nothing and sends nothing anywhere. It works in the desktop app, and the avatar in OBS follows too.
+
+**Reset motion to defaults** puts everything back to 1, and Follow the mouse back to off.
 
 ---
 
@@ -499,6 +502,7 @@ electron/server.js  local server: serves the app to OBS, saves the avatar file, 
 electron/images.js  the avatar's pictures as files: storing, moving them out of an old avatar file, clearing unused ones
 electron/backups.js the newest 5 copies of the avatar file: at each start, before a reset or a restore
 electron/update.js  asks GitHub for the latest release, for the "new version" notice
+electron/look.js    where the mouse pointer is, for "follow the mouse"
 electron/vcam.js    virtual camera: sends frames to the OBS Virtual Camera driver (Windows and macOS, through koffi)
 build/              logo, icons, the macOS microphone and camera permission text
 media/intro.mp4     the start-up intro
