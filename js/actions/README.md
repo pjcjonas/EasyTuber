@@ -1,6 +1,6 @@
 # Actions: your own animations
 
-An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. Each one is a single file. EASY-TUBER comes with one, `basketball.js` in this folder, which is also a full example of a bigger action: phases on a timeline, a ball and a hoop drawn in `front()`, confetti made from `a.random()` in `start()`, and arms that are handled whether or not they have a forearm.
+An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER ships with no actions. Each one you add is a single file.
 
 ## Adding one
 

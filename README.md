@@ -323,9 +323,7 @@ Send it with a **Fetch URL** sub-action and the header `X-EasyTuber-Control: str
 
 ## 12. Actions: your own animations
 
-An action is an animation you play on demand: a wave, a spin, a prop that flies in. Each action is one small file, and you can add as many as you like, including ones somebody else made.
-
-**Built in: Basketball.** Your avatar dribbles a ball, shoots at a hoop that appears beside it, scores, and goes wild (jumping, arms up, confetti). It takes about 8 seconds. The hoop goes on the side of the stage with more room, and the arm on that side does the dribbling. The ball is sized to your avatar's face; **Ball size** and **Confetti** are in its settings. Arms with a forearm bend at the shoulder and elbow: both hands hold the ball in front of the face, the shooting arm stretches towards the hoop, and the fists go up to celebrate. From the catch on, the arms are drawn in front of the head. If your arms are only hands (no forearm image), the hands are moved about instead of swung, so they stay the right way up. If you have an expression called *Happy*, it is put on while the avatar celebrates. To play it from Streamer.bot: `…/api/streamerbot?action=basketball`.
+An action is an animation you play on demand: a wave, a spin, a prop that flies in. EASY-TUBER comes with none. Each action is one small file, and you can add as many as you like, including ones somebody else made.
 
 **Add an action**
 
