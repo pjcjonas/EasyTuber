@@ -108,6 +108,7 @@
       for (const [id, a] of Object.entries(p.actions || {})) {
         if (a.hotkey && PT.Actions && PT.Actions.get(id)) out.push({ accelerator: a.hotkey, action: 'action:' + id });
       }
+      for (const s of p.sequences || []) if (s.hotkey) out.push({ accelerator: s.hotkey, action: 'sequence:' + s.id });
       return out;
     },
     async register(bindings = this.bindings()) {
@@ -125,6 +126,7 @@
       const p = this.project;
       if (p.avatars.some((a) => a.hotkey === acc && a !== except)) return true;
       if (Object.entries(p.actions || {}).some(([id, a]) => a.hotkey === acc && except !== 'action:' + id)) return true;
+      if ((p.sequences || []).some((s) => s.hotkey === acc && except !== 'sequence:' + s.id)) return true;
       return ['next', 'random'].some((k) => k !== except && p.hotkeys[k] === acc);
     },
 
@@ -228,6 +230,9 @@
         const id = a.slice(7), all = this.project.actions;
         all[id] = all[id] || { hotkey: '', settings: {} };
         all[id].hotkey = acc;
+      } else if (typeof a === 'string' && a.startsWith('sequence:')) {
+        const s = (this.project.sequences || []).find((x) => x.id === a.slice(9));
+        if (s) s.hotkey = acc;
       } else a.hotkey = acc;
       this.app.changed({ settings: true });
       await this.register();

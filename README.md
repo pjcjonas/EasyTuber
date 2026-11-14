@@ -290,6 +290,8 @@ Only add action files you trust. An action is a small program that runs inside E
 4. For a held action, the address turns it on, and off again if it is already on. The tab shows the two other addresses you may want: one that only turns it on, and one that turns it off. Use those when one trigger starts it and another ends it.
 5. Some actions use values, such as a name to show. Type them in **Values for the action**, for example `user=%user%&amount=500`, and they are added to the address. Streamer.bot fills in its own variables, like `%user%`, when it sends it.
 
+**Saved sequences.** Click **Save sequence** to keep the sequence you built, with its timing and values. Under **Saved sequences** you can name it, **▶ Play** it, give it a global hotkey with **Set key**, and **Copy address** for Streamer.bot. The address is short and stays the same when you change the sequence later.
+
 When several requests arrive close together, sequences play one after another: up to 20 wait in a queue. A single action plays straight away; add `&queue=1` to its address to make it wait its turn too.
 
 Keep EASY-TUBER running while you stream.
@@ -363,7 +365,7 @@ An avatar made with the old browser version (`saved\avatar.pngtuber.json` next t
 | **F5** | Reload |
 | **F12** | Developer tools |
 | *Your avatar hotkeys* | Switch avatar, next avatar, random mix (set in the Avatars tab; work in any program) |
-| *Your action hotkeys* | Play an action (set in the Actions tab; work in any program) |
+| *Your action hotkeys* | Play an action or a saved sequence (set in the Actions tab; work in any program) |
 
 On a Mac, use **Cmd** where this says Ctrl.
 

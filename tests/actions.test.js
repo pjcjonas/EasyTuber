@@ -794,3 +794,82 @@ test('the catalog carries each action\'s saved cooldown, in ms', () => {
   ]);
   assert.equal(PT.Actions.catalog().length, 3);          // no project: no cooldowns
 });
+
+/* ---------------- saved sequences ---------------- */
+
+test('saved sequences are kept with the project and sent to the server in its units', () => {
+  const PT = loadPT();
+  const p = PT.normalizeProject({ parts: {}, sequences: [
+    { id: 's1', name: 'Entrance', steps: ['wave', 'next', 'avatar:a2', 'bad step!', 7], startDelay: 1.26, delay: 0.5, values: 'user=Bob&note=hi%20there&bad key=1&user=again', hotkey: 'Ctrl+Alt+E' },
+    { id: 's1', name: 'Same id', steps: ['wave'] },
+    { id: 's2', steps: ['wave'], startDelay: 0, delay: 99 },
+    { id: 's3', name: 'No steps', steps: [] },
+    { id: 'bad id', steps: ['wave'] },
+    null,
+  ] });
+  assert.deepEqual(JSON.parse(JSON.stringify(p.sequences)), [
+    { id: 's1', name: 'Entrance', steps: ['wave', 'next', 'avatar:a2'], startDelay: 1.3, delay: 0.5, values: 'user=Bob&note=hi%20there&bad key=1&user=again', hotkey: 'Ctrl+Alt+E' },
+    { id: 's2', name: 'Sequence', steps: ['wave'], startDelay: null, delay: null, values: '', hotkey: '' },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(PT.Actions.savedSequences(p))), [
+    { id: 's1', steps: ['wave', 'next', 'avatar:a2'], startDelay: 1300, delay: 500, args: { user: 'Bob', note: 'hi there' } },
+    { id: 's2', steps: ['wave'] },
+  ]);
+  assert.equal(PT.normalizeProject({ parts: {} }).sequences.length, 0);
+  assert.equal(PT.Actions.savedSequences(null).length, 0);
+  assert.ok(validBinding({ accelerator: 'Ctrl+Alt+E', action: 'sequence:s1' }));
+  assert.equal(validBinding({ accelerator: 'Ctrl+Alt+E', action: 'sequence:' }), false);
+});
+
+test('/api/streamerbot?run= plays a saved sequence with its own timing and values', async (t) => {
+  const { srv, sse, sb } = await server(t, 18890);
+  const json = { 'Content-Type': 'application/json' };
+  const post = (body) => request(srv.port, 'POST', '/api/actions', JSON.stringify(body), json);
+  const actions = [{ id: 'a', duration: 100 }, { id: 'b', duration: 100 }, { id: 'cool', label: 'Cool', duration: 100, cooldown: 60000 }];
+  assert.equal((await post({ actions, sequences: [
+    { id: 'intro', steps: ['a', 'b'], startDelay: 200, delay: 150, args: { user: 'Bob', mood: 'happy' } },
+    { id: 'plain', steps: ['b'] },
+    { id: 'broken', steps: ['a', 'gone'] },
+    { id: 'chill', steps: ['cool'] },
+  ] })).status, 200);
+  for (const bad of [[{ id: 'x', steps: [] }], [{ id: 'x', steps: ['bad step!'] }], [{ id: 'bad id', steps: ['a'] }], [{ id: 'x', steps: ['a'], args: { 'bad key': '1' } }], [{ id: 'x', steps: Array(9).fill('a') }], 'nope']) {
+    assert.equal((await post({ actions, sequences: bad })).status, 400, JSON.stringify(bad));
+  }
+  assert.equal((await post({ actions })).status, 200);                       // no list: no saved sequences
+  assert.equal((await sb('run=intro')).status, 404);
+  await post({ actions, sequences: [
+    { id: 'intro', steps: ['a', 'b'], startDelay: 200, delay: 150, args: { user: 'Bob', mood: 'happy' } },
+    { id: 'plain', steps: ['b'] }, { id: 'broken', steps: ['a', 'gone'] }, { id: 'chill', steps: ['cool'] },
+  ] });
+
+  const t0 = Date.now();
+  assert.equal((await sb('run=intro&user=Ann')).status, 202);
+  let ev = await sse.waitFor(2);
+  assert.deepEqual(ev.map((e) => e.data.id), ['a', 'b']);
+  assert.deepEqual(ev[0].data.args, { user: 'Ann', mood: 'happy' });          // the URL's value wins, the saved one stays
+  assert.ok(ev[0].at - t0 >= 180, 'its start delay');
+  assert.ok(ev[1].at - ev[0].at >= 130, 'its delay between steps');
+
+  // it waits its turn like any sequence, and a hotkey runs it too
+  assert.deepEqual(JSON.parse((await sb('run=plain')).body), { accepted: true, queued: 1 });
+  srv.trigger('sequence:plain');
+  ev = await sse.waitFor(4);
+  assert.deepEqual(ev.slice(2).map((e) => [e.data.id, e.data.args]), [['b', undefined], ['b', undefined]]);
+  srv.trigger('sequence:nope'); srv.trigger('sequence:broken');               // unknown, or with a missing step: nothing
+
+  const gone = await sb('run=broken');
+  assert.equal(gone.status, 404);
+  assert.match(JSON.parse(gone.body).error, /Unknown action: gone/);
+  assert.equal((await sb('run=nope')).status, 404);
+  for (const q of ['run=intro&delay=1', 'run=intro&startDelay=1', 'run=intro&queue=1', 'run=intro&hold=on', 'run=intro&run=plain', 'run=intro&action=a']) {
+    assert.equal((await sb(q)).status, 400, q);
+  }
+  // cooldowns apply, and force=1 (the Play button) skips them
+  await new Promise((r) => setTimeout(r, 250));
+  assert.equal((await sb('run=chill')).status, 202);
+  assert.equal((await sb('run=chill')).status, 429);
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal((await sb('run=chill&force=1')).status, 202);
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(sse.events.length, 6);
+});
