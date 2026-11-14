@@ -1,7 +1,8 @@
 /* Actions: your own animations, played on demand (Test button, a global hotkey, Streamer.bot).
 
-   EASY-TUBER ships no actions. Each one is a file in js/actions/ that calls PT.Actions.define()
-   and gets a <script> tag in index.html. js/actions/README.md describes how to write one.
+   EASY-TUBER ships no actions. Each one is a file that calls PT.Actions.define(), in the user's
+   actions folder (Actions tab -> Open actions folder) or in js/actions/. Every page loads them at
+   start-up; nothing else needs editing. js/actions/README.md describes how to write one.
 
    A play reaches every page (editor preview, stage window, OBS) with the same nonce and seed, so
    random choices made with a.random() look the same everywhere. This file only runs and blends
@@ -51,6 +52,7 @@
   const Actions = {
     MIN_MS, MAX_MS, ease, mulberry32,
     defs: new Map(),        // id -> definition, in the order the files were loaded
+    defined: 0,             // how many define() calls worked (loadAll checks that a file made one)
     running: [],            // [{ def, t0, n, seed, settings, state, random }]
     seen: [],               // nonces already played (a play can arrive by two routes)
     pose: null, view: null, // this frame's pose, for a.at()
@@ -69,12 +71,41 @@
         settings: (Array.isArray(def.settings) ? def.settings : []).map(cleanSetting).filter(Boolean),
       };
       this.defs.set(def.id, clean);
+      this.defined++;
       return clean;
     },
     get(id) { return this.defs.get(id) || null; },
     list() { return [...this.defs.values()]; },
     // what the server needs to check and time Streamer.bot requests
     catalog() { return this.list().map(({ id, label, duration }) => ({ id, label, duration })); },
+
+    /* Load every action file the server lists: the app's js/actions/ first, then the user's actions
+       folder, so a user file can replace one of the app's. files = [{ src, from }].
+       Returns { loaded, failed: [{ src, message }] }. A file that fails is skipped; the rest still load. */
+    async loadAll(files, doc = document, win = window) {
+      const failed = [];
+      let loaded = 0;
+      for (const f of files || []) {
+        if (!f || typeof f.src !== 'string') continue;
+        const before = this.defined;
+        const message = await new Promise((resolve) => {
+          // an error thrown while the file runs (a typo, a bad define()) arrives here, not on the tag
+          let thrown = '';
+          const onError = (e) => { if (!e.filename || e.filename.includes(f.src)) thrown = e.message || 'error'; };
+          win.addEventListener('error', onError);
+          const done = (m) => { win.removeEventListener('error', onError); resolve(m); };
+          const tag = doc.createElement('script');
+          tag.src = f.src;
+          tag.onload = () => done(thrown);
+          tag.onerror = () => done('could not be read');
+          doc.head.appendChild(tag);
+        });
+        if (message) failed.push({ src: f.src, message });
+        else if (this.defined === before) failed.push({ src: f.src, message: 'has no PT.Actions.define()' });
+        else loaded++;
+      }
+      return { loaded, failed };
+    },
 
     /* the saved settings for an action, with defaults for anything missing and values kept in range */
     settingsFor(project, def) {

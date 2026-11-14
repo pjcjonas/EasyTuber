@@ -166,6 +166,20 @@
         return r.ok;
       } catch (e) { return false; }
     },
+    /* The action files to load: { files: [{ src, from: 'app' | 'user' }], folder }. Empty without the server. */
+    async actionFiles() {
+      if (!this.server) return { files: [], folder: '' };
+      try {
+        const r = await fetchTimeout('api/action-files', {}, 5000);
+        const data = r.ok ? await r.json() : null;
+        return { files: data && Array.isArray(data.files) ? data.files : [], folder: (data && data.folder) || '' };
+      } catch (e) { console.warn(e); return { files: [], folder: '' }; }
+    },
+    /* Show the user's actions folder in the file manager (desktop app only). Throws with the reason. */
+    async openActionsFolder() {
+      const r = await fetch('api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: 'actions' }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server said ' + r.status);
+    },
     /* Play a Streamer.bot URL exactly as Streamer.bot would. Throws with the server's reason. */
     async runActionUrl(url) {
       const r = await fetch(url, { headers: { 'X-EasyTuber-Control': 'streamerbot' } });

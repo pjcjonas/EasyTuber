@@ -21,6 +21,10 @@
       const loaded = await PT.Storage.load();
       this.project = PT.normalizeProject(loaded.project);
       await PT.Assets.loadProject(this.project);
+      // the action files: the app's js/actions/ and the user's actions folder (the same list on every page)
+      const actionFiles = await PT.Storage.actionFiles();
+      this.actionsFolder = actionFiles.folder;
+      this.actionLoad = await PT.Actions.loadAll(actionFiles.files);
 
       this.renderer = new PT.Renderer($('stage'));
       this.renderer.stageMode = this.stageMode;
@@ -68,6 +72,7 @@
         else if (msg.type === 'level') { this.remote.v = msg.v; this.remote.t = performance.now(); }
         else if (msg.type === 'blink') this.animator.blink();
         else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
+        else if (msg.type === 'reload-actions') location.reload();   // the editor is loading its action files again
         else if (msg.type === 'switch-out') {
           if (msg.test) PT.Transition.play();
           else { switching = true; PT.Transition.out(); }
@@ -160,6 +165,7 @@
 
       // actions (js/actions/*.js): the server plays them on every page, this one included
       PT.Actions.onError = (def, e) => PT.toast(`Action "${def.label}" stopped with an error: ${e.message}`, 'error', 8000);
+      for (const f of this.actionLoad.failed) PT.toast(`Action file ${f.src.split('/').pop()} was skipped: ${f.message}`, 'error', 10000);
       PT.Storage.setActions(PT.Actions.catalog());
       PT.Storage.onLive((msg) => { if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project); });
 

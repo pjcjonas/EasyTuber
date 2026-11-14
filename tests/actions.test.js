@@ -312,3 +312,95 @@ test('the API only answers to a local address', async (t) => {
   // the page itself is not secret
   assert.equal((await as(`evil.example:${srv.port}`, '/')).status, 200);
 });
+
+/* ---------------- drop-in action files ---------------- */
+
+test('loadAll adds one script per file, in order, and reports the files that fail', async () => {
+  const PT = loadPT();
+  const listeners = new Set();
+  const win = { addEventListener: (_n, fn) => listeners.add(fn), removeEventListener: (_n, fn) => listeners.delete(fn) };
+  const added = [];
+  // a stand-in page: "running" a file means calling what the test says that file does
+  const files = {
+    'js/actions/wave.js': () => PT.Actions.define({ id: 'wave', label: 'App wave', duration: 500 }),
+    'user-actions/wave.js': () => PT.Actions.define({ id: 'wave', label: 'My wave', duration: 900 }),
+    'user-actions/empty.js': () => {},
+    'user-actions/typo.js': () => { for (const fn of listeners) fn({ filename: 'http://localhost:8777/user-actions/typo.js', message: 'Unexpected token' }); },
+    'user-actions/gone.js': null,
+  };
+  const doc = {
+    createElement: () => ({}),
+    head: { appendChild(tag) {
+      added.push(tag.src);
+      const run = files[tag.src];
+      setTimeout(() => { if (run) { run(); tag.onload(); } else tag.onerror(); }, 0);
+    } },
+  };
+  const res = await PT.Actions.loadAll(Object.keys(files).map((src) => ({ src })), doc, win);
+  assert.deepEqual(added, Object.keys(files));
+  assert.equal(res.loaded, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(res.failed)), [
+    { src: 'user-actions/empty.js', message: 'has no PT.Actions.define()' },
+    { src: 'user-actions/typo.js', message: 'Unexpected token' },
+    { src: 'user-actions/gone.js', message: 'could not be read' },
+  ]);
+  // the user's file came second, so it replaced the app's action of the same id
+  assert.equal(PT.Actions.list().length, 1);
+  assert.equal(PT.Actions.get('wave').label, 'My wave');
+  assert.equal(listeners.size, 0);
+});
+
+test('/api/action-files lists the app\'s and the user\'s action files, and the user folder is served', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'easytuber-test-'));
+  const root = path.join(dir, 'app'), actionsDir = path.join(dir, 'actions');
+  fs.mkdirSync(path.join(root, 'js', 'actions'), { recursive: true });
+  fs.mkdirSync(path.join(actionsDir, 'spin'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'index.html'), '<html></html>');
+  fs.writeFileSync(path.join(root, 'js', 'actions', 'wave.js'), '// app');
+  fs.writeFileSync(path.join(root, 'js', 'actions', 'README.md'), 'not an action');
+  fs.writeFileSync(path.join(actionsDir, 'spin.js'), '// spin');
+  fs.writeFileSync(path.join(actionsDir, 'bow.js'), '// bow');
+  fs.writeFileSync(path.join(actionsDir, 'bad name.js'), '// skipped');
+  fs.writeFileSync(path.join(actionsDir, 'notes.txt'), 'skipped');
+  fs.writeFileSync(path.join(actionsDir, 'spin', 'star.png'), 'png');
+  fs.writeFileSync(path.join(dir, 'secret.txt'), 'outside');
+  let opened = 0;
+  const srv = await start({ root, saveFile: path.join(dir, 'avatar.json'), port: 18840, actionsDir, onOpenFolder: async () => { opened++; return ''; } });
+  t.after(() => { srv.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+
+  const list = JSON.parse((await request(srv.port, 'GET', '/api/action-files')).body);
+  assert.deepEqual(list.files, [
+    { src: 'js/actions/wave.js', from: 'app' },
+    { src: 'user-actions/bow.js', from: 'user' },
+    { src: 'user-actions/spin.js', from: 'user' },
+  ]);
+  assert.equal(list.folder, actionsDir);
+
+  const file = await request(srv.port, 'GET', '/user-actions/spin.js');
+  assert.equal(file.status, 200);
+  assert.equal(file.body, '// spin');
+  assert.equal((await request(srv.port, 'GET', '/user-actions/spin/star.png')).status, 200);
+  assert.equal((await request(srv.port, 'GET', '/user-actions/nope.js')).status, 404);
+  // nothing outside the folder
+  for (const p of ['/user-actions/../secret.txt', '/user-actions/%2e%2e/secret.txt', '/user-actions/..%5csecret.txt', '/user-actions/%2e%2e%2favatar.json']) {
+    const r = await request(srv.port, 'GET', p);
+    assert.ok(r.status === 403 || r.status === 404, `${p} -> ${r.status}`);
+    assert.notEqual(r.body, 'outside');
+  }
+
+  const json = { 'Content-Type': 'application/json' };
+  assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: 'actions' }), json)).status, 200);
+  assert.equal(opened, 1);
+  assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: '/' }), json)).status, 400);
+  assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: 'actions' }), {})).status, 415);
+  assert.equal(opened, 1);
+});
+
+test('without an actions folder only the app\'s files are listed', async (t) => {
+  const { srv } = await server(t, 18841);
+  const list = JSON.parse((await request(srv.port, 'GET', '/api/action-files')).body);
+  assert.deepEqual(list, { files: [], folder: '' });                       // EASY-TUBER ships none
+  assert.equal((await request(srv.port, 'GET', '/user-actions/x.js')).status, 404);
+  const json = { 'Content-Type': 'application/json' };
+  assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: 'actions' }), json)).status, 501);
+});

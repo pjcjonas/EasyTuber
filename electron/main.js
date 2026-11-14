@@ -121,7 +121,15 @@ async function boot() {
   });
   session.defaultSession.setPermissionCheckHandler((wc, permission) => allowed.has(permission));
 
-  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys, onVcam: setCamera });
+  // the user's own actions: one file per action, loaded by every page (see js/actions/README.md)
+  const actionsDir = path.join(app.getPath('userData'), 'actions');
+  try { fs.mkdirSync(actionsDir, { recursive: true }); } catch (e) { /* the folder is made when it's opened */ }
+  const openFolder = async () => {
+    try { fs.mkdirSync(actionsDir, { recursive: true }); } catch (e) { return 'Could not create the actions folder: ' + e.message; }
+    return shell.openPath(actionsDir);   // '' when it opened, or the reason it didn't
+  };
+
+  srv = await start({ root: ROOT, saveFile: avatarFile(), onHotkeys: setHotkeys, onVcam: setCamera, actionsDir, onOpenFolder: openFolder });
   origin = `http://localhost:${srv.port}`;
   createMainWindow();
 }

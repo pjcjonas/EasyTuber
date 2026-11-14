@@ -2,7 +2,8 @@
    - Serves the app on http://localhost:<port>/ so OBS can load it as a Browser Source.
    - Keeps the avatar in a file, so OBS (which has its own browser storage) sees the same avatar.
    - Relays the editor's mic level / blinks to stage pages with Server-Sent Events.
-   - Passes hotkey and virtual-camera requests from the editor on to the desktop app. */
+   - Passes hotkey and virtual-camera requests from the editor on to the desktop app.
+   - Lists the action files (the app's js/actions/ and the user's actions folder) for the pages to load. */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -13,6 +14,8 @@ const MIME = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.mp4': 'video/mp4',
 };
 const STATIC_DIRS = ['css', 'js', 'build', 'media'];
+const USER_ACTIONS = 'user-actions';          // URL folder for the user's actions folder
+const ACTION_FILE = /^[\w-]{1,40}\.js$/;      // an action file: <id>.js
 const MAX_BODY = 1024 * 1024 * 1024;   // several avatars' images, as data URLs
 
 /* A global hotkey binding from the page: { accelerator: "Ctrl+Alt+1", action: "avatar:<id>" | "next" | "random" }.
@@ -55,7 +58,16 @@ function parseCatalog(list) {
   return out;
 }
 
-function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null }) {
+/* The action files in a folder, in name order. A folder that isn't there has none. */
+async function actionFiles(dir) {
+  if (!dir) return [];
+  try {
+    const names = await fs.promises.readdir(dir, { withFileTypes: true });
+    return names.filter((d) => d.isFile() && ACTION_FILE.test(d.name)).map((d) => d.name).sort();
+  } catch (e) { return []; }
+}
+
+function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null }) {
   let version = 0;
   const listeners = new Set();
   let catalog = new Map();       // actions the editor has loaded
@@ -122,12 +134,16 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
   });
 
   const serveStatic = (req, res, urlPath) => {
-    let rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath.slice(1));
+    let rel;
+    try { rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath.slice(1)); } catch (e) { res.writeHead(400); return res.end(); }
     rel = path.normalize(rel).replace(/^(\.\.[/\\])+/, '');
-    const top = rel.split(/[/\\]/)[0];
-    if (rel !== 'index.html' && !STATIC_DIRS.includes(top)) { res.writeHead(404); return res.end('Not found'); }
-    const file = path.join(root, rel);
-    if (!file.startsWith(root)) { res.writeHead(403); return res.end(); }
+    const [top, ...rest] = rel.split(/[/\\]/);
+    // user-actions/... is the user's actions folder: action files, and their pictures and sounds
+    const user = top === USER_ACTIONS && !!actionsDir;
+    if (rel !== 'index.html' && !user && !STATIC_DIRS.includes(top)) { res.writeHead(404); return res.end('Not found'); }
+    const base = user ? actionsDir : root;
+    const file = path.join(base, user ? rest.join(path.sep) : rel);
+    if (file !== base && !file.startsWith(base + path.sep)) { res.writeHead(403); return res.end(); }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
     fs.stat(file, (err, st) => {
       if (err || !st.isFile()) { res.writeHead(404); return res.end('Not found'); }
@@ -183,7 +199,28 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         }
       }
 
-      // the editor says which actions it has (js/actions/*.js), so Streamer.bot requests can be checked and timed
+      /* Which action files there are: the app's own (js/actions/) first, then the user's folder.
+         Every page loads them in this order, so a user file can replace one of the app's. */
+      if (urlPath === '/api/action-files' && req.method === 'GET') {
+        const [app, user] = await Promise.all([actionFiles(path.join(root, 'js', 'actions')), actionFiles(actionsDir)]);
+        return sendJson(res, 200, {
+          files: [...app.map((f) => ({ src: 'js/actions/' + f, from: 'app' })), ...user.map((f) => ({ src: USER_ACTIONS + '/' + f, from: 'user' }))],
+          folder: actionsDir || '',
+        });
+      }
+
+      // "Open actions folder" in the editor: the desktop app shows the folder in the file manager
+      if (urlPath === '/api/open-folder' && req.method === 'POST') {
+        if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
+        if (!onOpenFolder) return sendJson(res, 501, { error: 'not available outside the desktop app' });
+        let data;
+        try { data = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+        if (!data || data.folder !== 'actions') return sendJson(res, 400, { error: 'unknown folder' });
+        const error = await onOpenFolder('actions');
+        return error ? sendJson(res, 500, { error }) : sendJson(res, 200, { ok: true });
+      }
+
+      // the editor says which actions it has loaded, so Streamer.bot requests can be checked and timed
       if (urlPath === '/api/actions' && req.method === 'POST') {
         if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
         let data;
