@@ -12,6 +12,8 @@
     simTalk: false,
     stageMode: false,
     stepped: 0,          // when running actions were last moved on (by a frame, or by the timer in init)
+    look: null,          // where the mouse pointer is on the screen, { x, y } in -1..1 (from the desktop app)
+    lookOn: false,       // the desktop app has been asked to watch the pointer
     exprTemp: null,      // an expression shown for a while: { id, until } (see setExpression)
     editExpression: '',  // Edit mode: the expression whose images the Part tab is showing
     remote: { v: 0, t: -1e9 },
@@ -84,6 +86,7 @@
         else if (msg.type === 'blink') this.animator.blink();
         else if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
+        else if (msg.type === 'look') this.look = { x: +msg.x || 0, y: +msg.y || 0 };
         else if (msg.type === 'expression') {
           // the editor changed the expression: show it now, before the saved avatar arrives
           const id = typeof msg.id === 'string' ? msg.id : '';
@@ -198,7 +201,9 @@
       PT.Storage.onLive((msg) => {
         if (msg.type === 'action') PT.Actions.play(msg.id, msg, this.project);
         else if (msg.type === 'action-stop') PT.Actions.release(msg.id);
+        else if (msg.type === 'look') this.look = { x: +msg.x || 0, y: +msg.y || 0 };
       });
+      this.syncLook();
       PT.Actions.onHeld = () => PT.Panels.syncHeld();
 
       // global hotkeys: registered by the desktop app, delivered here even while you're in a game
@@ -375,6 +380,7 @@
       await PT.Assets.loadProject(p);
       this.project = p;
       this.selected = null;
+      this.syncLook();
       PT.Editor.resetHistory();
       PT.Panels.syncers = [];
       PT.Panels.init();
@@ -449,9 +455,20 @@
       if (id) PT.Panels.showTab('part');
     },
 
+    // the desktop app watches the mouse pointer only while a "follow the mouse" slider is up
+    syncLook() {
+      if (this.stageMode || !PT.Storage.server) return;
+      const m = this.project.motion, on = m.eyesFollow > 0 || m.headFollow > 0;
+      if (on === this.lookOn) return;
+      this.lookOn = on;
+      if (!on) this.look = null;
+      PT.Storage.setLook(on);
+    },
+
     changed(o = {}) {
       this.save();
       if (this.stageMode) return;
+      this.syncLook();
       if (o.structure) { PT.Panels.renderPartList(); PT.Panels.renderInspector(); PT.Panels.renderStageTab(); }
       else if (o.transform || o.settings) PT.Panels.syncInspector();
     },
@@ -567,7 +584,7 @@
       if (!this.stageMode && (ownMic || this.simTalk)) PT.Storage.live({ type: 'level', v: level });
       if (this.stageMode) $('clickToStart').hidden = ownMic || remoteFresh || this.inOBS;
 
-      const anim = this.animator.update(dt, level, p.motion, p.mic);
+      const anim = this.animator.update(dt, level, p.motion, p.mic, this.look);
       this.lastAnim = anim;
       this.stepped = now;
       const act = PT.Actions.update(now, p);   // running actions: extra motion + eye / mouth overrides

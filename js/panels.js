@@ -488,6 +488,10 @@
         this.section('Secondary motion',
           f('Arm sway', 'armSway', 0, 3, 0.05, 'Idle arm movement'),
           f('Hair physics', 'hairPhysics', 0, 3, 0.05, 'How much the hair swings after the head moves')),
+        PT.Storage.server ? this.section('Follow the mouse',
+          this.note('The avatar looks towards your mouse pointer, wherever it is on the screen. 0 = off.'),
+          f('Eyes follow mouse', 'eyesFollow', 0, 2, 0.05, 'How far the eyes move towards the pointer'),
+          f('Head follows mouse', 'headFollow', 0, 2, 0.05, 'How far the head turns towards the pointer')) : '',
         el('div', { class: 'row' }, el('button', {
           class: 'btn', onclick: () => { Object.assign(m, PT.DEFAULT_MOTION); this.syncInspector(); app.changed({ settings: true }); },
         }, 'Reset motion to defaults')),

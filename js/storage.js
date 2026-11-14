@@ -242,6 +242,15 @@
     },
     /* Virtual camera (desktop app only). on = true / false to start / stop, nothing to ask.
        Returns { on, device, error }, or null where there is no camera. */
+    // ask the desktop app to watch the mouse pointer (or stop), for "follow the mouse"
+    async setLook(on) {
+      if (!this.server) return false;
+      try {
+        const r = await fetch('api/look', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }) });
+        return r.ok;
+      } catch (e) { return false; }
+    },
+
     async vcam(on) {
       if (!this.server) return null;
       try {

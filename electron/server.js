@@ -124,7 +124,7 @@ function parseSequences(list) {
   return out;
 }
 
-function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null, latestRelease = update.latest }) {
+function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVcam = null, actionsDir = null, onOpenFolder = null, latestRelease = update.latest, onLook = null }) {
   let appVersion = '';
   try { appVersion = String(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || ''); } catch (e) { /* unknown */ }
   let release = null, releaseAt = 0;   // what GitHub last said, and when it was asked
@@ -525,6 +525,16 @@ function start({ root, saveFile, port = 8777, tries = 10, onHotkeys = null, onVc
         if (!list || list.length > 64 || !list.every(validBinding)) return sendJson(res, 400, { error: 'bad hotkeys' });
         const results = await onHotkeys(list.map((b) => ({ accelerator: b.accelerator, action: b.action })));
         return sendJson(res, 200, { results });
+      }
+
+      // "eyes / head follow the mouse": the editor says whether the desktop app should watch the pointer (see look.js)
+      if (urlPath === '/api/look' && req.method === 'POST') {
+        if (!onLook) return sendJson(res, 501, { error: 'not available outside the desktop app' });
+        if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return sendJson(res, 415, { error: 'json only' });
+        let data;
+        try { data = JSON.parse(await readBody(req)); } catch (e) { return sendJson(res, 400, { error: 'bad json' }); }
+        if (!data || typeof data.on !== 'boolean') return sendJson(res, 400, { error: 'bad request' });
+        return sendJson(res, 200, await onLook(data.on));
       }
 
       // the virtual camera is run by the desktop app (see main.js): GET = status, POST { on } = start / stop

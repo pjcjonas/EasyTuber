@@ -146,6 +146,8 @@
     armSway: 1,
     gesture: 1,
     hairPhysics: 1,
+    eyesFollow: 0,      // how far the eyes move towards the mouse pointer (0 = off)
+    headFollow: 0,      // how far the head turns towards it (0 = off)
   };
 
   PT.DEFAULT_MIC = {
