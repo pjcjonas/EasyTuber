@@ -44,8 +44,43 @@
     return out;
   }
 
+  // words in a file name that say which frame it is, not which item: eyes_closed and eyes_open are one pair
+  const FRAME_WORD = /^(open|opened|closed|close|shut|half|mid|blink|blinking|talk|talking|idle|quiet|small|wide|big|a|ah|aa|o|oh|oo|u|e|ee|eh|i)$/;
+
+  /* How uploaded pictures become library entries: [{ part, name, files: [{ index, state }] }].
+     names = the file names; partId = the part they were uploaded for, or null to tell from the names.
+     Every picture is an entry of its own, except frames of one item: pictures for a part with
+     several frames (eyes, mouth) whose names differ only by the frame word go together. */
+  function groupUploads(names, partId = null) {
+    const groups = new Map();
+    names.forEach((fileName, index) => {
+      const r = partId ? { part: partId } : PT.routeFilename(fileName);
+      const part = r.part || '', def = PT.PART[part];
+      const frames = def ? def.states.concat(def.extra || []) : [];
+      let state = null, key = 'file:' + index;
+      if (def && frames.length > 1) {
+        const n = PT.routeFilename(fileName);
+        state = n.part === part ? n.state : null;
+        const words = fileName.toLowerCase().replace(/\.[a-z0-9]+$/, '').split(/[^a-z0-9]+/).filter(Boolean);
+        const item = words.filter((w) => !FRAME_WORD.test(w)).join('-');
+        if (state && item) key = part + ':' + item;          // a frame of an item: grouped with its other frames
+      } else if (def) state = 'main';
+      const g = groups.get(key) || { part, name: '', files: [], base: fileName.replace(/\.[a-z0-9]+$/i, '') };
+      if (def && (!state || g.files.some((x) => x.state === state))) state = frames.find((s) => !g.files.some((x) => x.state === s)) || frames[0];
+      g.files.push({ index, state: state || 'main' });
+      groups.set(key, g);
+    });
+    return [...groups.values()].map((g) => {
+      const def = PT.PART[g.part];
+      // one picture: its file name; frames of one item: the name without the frame word
+      const name = g.files.length === 1 ? g.base
+        : g.base.split(/[^A-Za-z0-9]+/).filter((w) => w && !FRAME_WORD.test(w.toLowerCase())).join(' ') || (def ? PT.partName(def) : g.base);
+      return { part: g.part, name: name.slice(0, 60), files: g.files };
+    });
+  }
+
   const Library = {
-    MAX, cover, fitImages,
+    MAX, cover, fitImages, groupUploads,
     undo: null,          // { id, part, avatar } : what the last swap replaced, so it can be put back
 
     get project() { return PT.App.project; },
@@ -117,28 +152,15 @@
        one library part (open, half and closed eyes together). Returns the parts added. */
     async upload(files, partId = null) {
       files = Array.from(files).filter((f) => /^image\//.test(f.type) || /\.(png|webp|gif|jpe?g)$/i.test(f.name));
-      const groups = new Map();   // part -> { images, names }
-      for (const f of files) {
-        const r = partId ? { part: partId } : PT.routeFilename(f.name);
-        const part = r.part || '';
-        const def = PT.PART[part];
-        let state = r.state;
-        if (def && partId && def.states.length > 1) { const n = PT.routeFilename(f.name); state = n.part === part ? n.state : null; }
-        // a part of its own for each picture nothing claims; else one per part
-        const key = part || 'file:' + f.name;
-        const g = groups.get(key) || { part, images: {}, names: [] };
-        if (def && !state) state = def.states.concat(def.extra || []).find((s) => !g.images[s]) || def.states[0];
-        try { g.images[state || 'main'] = await PT.Assets.fileToDataURL(f); } catch (e) { PT.toast(`Could not read ${f.name}: ${e.message}`, 'error'); continue; }
-        g.names.push(f.name.replace(/\.[a-z0-9]+$/i, ''));
-        groups.set(key, g);
-      }
       const added = [];
-      for (const g of groups.values()) {
-        if (!Object.keys(g.images).length) continue;
+      for (const g of groupUploads(files.map((f) => f.name), partId)) {
+        const images = {};
+        for (const { index, state } of g.files) {
+          try { images[state] = await PT.Assets.fileToDataURL(files[index]); } catch (e) { PT.toast(`Could not read ${files[index].name}: ${e.message}`, 'error'); }
+        }
+        if (!Object.keys(images).length) continue;
         if (this.list().length >= MAX) { PT.toast(`The library is full (${MAX} parts).`, 'warn'); break; }
-        const def = PT.PART[g.part];
-        const name = g.names.length === 1 ? g.names[0] : def ? PT.partName(def) : g.names[0];
-        const item = { id: uid(), kind: 'part', name: name.slice(0, 60), part: g.part, images: g.images, adj: {}, place: null, at: Date.now() };
+        const item = { id: uid(), kind: 'part', name: g.name, part: g.part, images, adj: {}, place: null, at: Date.now() };
         this.list().push(item);
         added.push(item);
       }

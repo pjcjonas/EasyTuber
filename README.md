@@ -317,8 +317,8 @@ Parts of your own exist on every skin and avatar (see *Your own parts* in sectio
 The parts library is a collection of parts kept apart from your avatars, to build new avatars from: hats, eyes, mouths, outfits, a whole arm. It is shared by all your avatars, saved in your avatar file, and included in **Save file**.
 
 * **Save to library** (Part tab, under Swap part) keeps the selected part, with its pictures and placement.
-* **Upload to library…** (Part tab) adds pictures for the selected part, without changing your avatar.
-* **Upload parts…** (Avatars tab, under **Parts library**) adds many pictures at once. They are sorted by file name like dropped layers: `eyes_open.png` and `eyes_closed.png` become one pair of eyes; a picture whose name matches no part becomes a part for *any part*.
+* **Upload options…** (Part tab, under Swap part) adds pictures for the selected part, without changing your avatar. Pick several at once, or drop them on the Swap part box: each picture becomes an option of its own. Frames of one item stay together: `cute_eyes_open.png` and `cute_eyes_closed.png` become one pair of eyes.
+* **Upload parts…** (Avatars tab, under **Parts library**) adds many pictures at once. They are sorted by file name like dropped layers, and each becomes an entry of its own, except frames of one item: `eyes_open.png` and `eyes_closed.png` become one pair of eyes. A picture whose name matches no part becomes a part for *any part*.
 * In the **Parts library** list you can rename a part, change which part it is for, or delete it. Deleting it from the library doesn't take it off an avatar that uses it.
 * To build a new avatar from the library, click **+ New avatar**, then select each part and pick from **Swap part**. Tick **Show library parts made for other parts too** to put, say, a sticker on any part.
 * **Next skin** steps through your skins in order with one key.
