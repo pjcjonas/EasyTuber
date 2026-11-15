@@ -1,7 +1,7 @@
 /* Actions: your own animations, played on demand (Test button, a global hotkey, Streamer.bot).
 
-   EASY-TUBER ships no actions. Each one is a file that calls PT.Actions.define(), in the user's
-   actions folder (Actions tab -> Open actions folder) or in js/actions/. Every page loads them at
+   Each action is a file that calls PT.Actions.define(): the built-in pack in js/actions/, or the user's
+   actions folder (Actions tab -> Open actions folder). Every page loads them at
    start-up; nothing else needs editing. js/actions/README.md describes how to write one.
 
    A play reaches every page (editor preview, stage window, OBS) with the same nonce and seed, so

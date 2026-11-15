@@ -1,6 +1,6 @@
 # Actions: your own animations
 
-An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER ships with no actions. Each one you add is a single file.
+An action is an animation you trigger on demand. You can play it from the **Actions** tab (▶ Test), with a global hotkey, or from Streamer.bot. EASY-TUBER comes with ten (the High energy pack in `js/actions/`, which are also good examples to copy). Each one you add is a single file.
 
 ## Adding one
 
