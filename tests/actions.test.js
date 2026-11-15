@@ -23,7 +23,7 @@ function loadPT() {
 
 /* ---------------- engine ---------------- */
 
-test('ships with no actions', () => {
+test('the engine alone defines no actions', () => {
   const PT = loadPT();
   assert.equal(PT.Actions.list().length, 0);
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -400,7 +400,8 @@ test('/api/action-files lists the app\'s and the user\'s action files, and the u
 test('without an actions folder only the app\'s files are listed', async (t) => {
   const { srv } = await server(t, 18841);
   const list = JSON.parse((await request(srv.port, 'GET', '/api/action-files')).body);
-  assert.deepEqual(list, { files: [], folder: '' });                       // EASY-TUBER ships none
+  const pack = ['cheer', 'dance', 'dizzy', 'headbang', 'hop', 'shiver', 'spin', 'surprised', 'victory', 'wave'];
+  assert.deepEqual(list, { files: pack.map((id) => ({ src: `js/actions/${id}.js`, from: 'app' })), folder: '' });   // the High energy pack
   assert.equal((await request(srv.port, 'GET', '/user-actions/x.js')).status, 404);
   const json = { 'Content-Type': 'application/json' };
   assert.equal((await request(srv.port, 'POST', '/api/open-folder', JSON.stringify({ folder: 'actions' }), json)).status, 501);

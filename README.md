@@ -353,7 +353,24 @@ Send it with a **Fetch URL** sub-action and the header `X-EasyTuber-Control: str
 
 ## 12. Actions: your own animations
 
-An action is an animation you play on demand: a wave, a spin, a prop that flies in. EASY-TUBER comes with none. Each action is one small file, and you can add as many as you like, including ones somebody else made.
+An action is an animation you play on demand: a wave, a spin, a prop that flies in. Each action is one small file, and you can add as many as you like, including ones somebody else made.
+
+**Built in: the High energy pack.** Ten actions come with EASY-TUBER. They only move your own parts (arms bend at the shoulder and elbow, and your own hand parts go with them) and draw a few simple shapes. Each one has a **Strength** slider (Spin has **Turns** and **Hop** instead) and a checkbox that turns its drawn extras off. To play one from Streamer.bot, use its id: `…/api/streamerbot?action=hop`.
+
+| Id | Action | What it does |
+|---|---|---|
+| `hop` | Hop (0.9 s) | Crouches, jumps and lands with a squash. Dust puffs on landing. |
+| `cheer` | Cheer (2.4 s) | Both arms up, two hops, a happy face. Sparkles burst from the hands. |
+| `dance` | Dance (4 s) | Sways and bounces on the beat, arms up in turn. Music notes float up. |
+| `spin` | Spin (1.4 s) | Turns round on the spot with a little hop. Speed arcs behind. |
+| `headbang` | Headbang (2.4 s) | Fast nods with eyes shut and mouth open. Impact lines on the beat. |
+| `surprised` | Surprised (1.2 s) | Jolts up, arms out, eyes and mouth wide. A "!" pops up. |
+| `shiver` | Shiver (2.5 s) | Trembles with arms pulled in. Cold wavy lines either side. |
+| `dizzy` | Dizzy (3 s) | Head circles, body wobbles. 3 to 5 stars orbit the head. |
+| `wave` | Wave (2.2 s) | Raises the right hand and waves three times. |
+| `victory` | Victory pose (held) | Arms up and chest out until you turn it off. Sparkles twinkle by the hands. |
+
+Cheer and Victory pose put on your expression called *Happy*, if you have one. To change one of them, put a file with the same id in your actions folder: yours is used instead.
 
 **Add an action**
 
