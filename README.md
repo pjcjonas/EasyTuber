@@ -92,6 +92,8 @@ Not sure which Mac you have? Apple menu → **About This Mac**. "Chip: Apple M�
 | **Bottom bar** | **Start mic**, the level meter with its **talk** and **open** markers, the mouth/eyes status, and **Hold to test talk** |
 | **Right panel** | Seven tabs: **Part** (the selected part), **Motion**, **Mic**, **Stage**, **Avatars**, **Actions** and **Accessories**. Each tab is split into clearly marked sections |
 
+**Help is one click away.** Every section has a **?** on its heading that opens a short explanation of what it does and how to use it. The tabs have **How this tab works**, the parts panel and the microphone bar have a **?** of their own, and **? Help** in the top bar lists every topic.
+
 **The side panels float over the stage.** Click the small tab on a panel's inner edge (**‹** / **›**) to slide it away and give the stage the whole width; click it again to bring the panel back. Drag the right panel's inner edge to make it wider or narrower (double-click the edge for its usual width). The stage always frames the avatar in the space the panels leave free, and the app remembers how you left them.
 
 Until you upload your own art, every part shows a built-in placeholder character, so you can see the motion straight away.
@@ -537,6 +539,8 @@ npm start
 On Windows you can also double-click `start.bat`.
 
 **Tests:** `npm test`
+
+**Help popups.** Every section of the app has a help topic in `js/help.js`. A section made with `Panels.section('Title', …)` gets its **?** from the topic `section:Title`; tabs use `tab:<data-tab>`. When you add a section, add its topic; when you change what a section does, update its topic. `tests/help.test.js` fails if a section has no topic or a topic's section is gone.
 
 **Build the app**
 

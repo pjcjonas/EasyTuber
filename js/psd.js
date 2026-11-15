@@ -139,6 +139,7 @@
           el('header', { class: 'modal-head' },
             el('h2', {}, 'Import ' + job.name),
             el('span', { class: 'part-sub' }, `${job.psd.width} × ${job.psd.height}px, ${job.layers.length} layer${job.layers.length === 1 ? '' : 's'}`),
+            PT.Help.button('psd'),
             el('button', { class: 'icon-btn close', title: 'Close', onclick: () => this.close() }, '✕')),
           el('div', { class: 'psd-list' },
             el('p', { class: 'note' }, `Each layer becomes the image of a part of "${avatar}", replacing the image that part has. Layers were matched by their names; change any that are wrong. Several layers sent to the same part are put together into one image.`),
@@ -147,7 +148,7 @@
             el('span', { class: 'note' }, 'Listed from the back to the front.'),
             el('button', { class: 'btn ghost', onclick: () => this.close() }, 'Cancel'),
             el('button', { class: 'btn primary', onclick: (e) => { e.target.disabled = true; this.apply(job, choices); } }, 'Import'))));
-      this.onKey = (e) => { if (e.key === 'Escape') this.close(); };
+      this.onKey = (e) => { if (e.key === 'Escape' && !(PT.Help && PT.Help.isOpen)) this.close(); };   // help on top closes first
       window.addEventListener('keydown', this.onKey, true);
       document.body.append(this.back);
     },
