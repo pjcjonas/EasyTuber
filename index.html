@@ -28,6 +28,7 @@
       <button id="btnReset" class="btn ghost danger" title="Remove all uploads and settings">Reset</button>
       <span class="sep"></span>
       <button id="btnStage" class="btn primary" title="Open a clean window to capture in OBS">Open stage window</button>
+      <button class="btn ghost help-top" data-help="app" title="How everything works, with a list of every help topic">? Help</button>
       <input id="importInput" type="file" accept=".json,application/json" hidden>
     </div>
   </header>
@@ -45,6 +46,7 @@
         <!-- ============ LEFT: PARTS ============ -->
         <aside class="panel left ui-only">
           <div class="panel-body">
+            <div class="panel-head"><span>Parts</span><button class="help-btn" type="button" data-help="parts" title="Help: Parts panel" aria-label="Help: Parts panel">?</button></div>
             <div id="dropAll" class="dropzone" tabindex="0">
               <strong>Drop all your layers here</strong>
               <span>Files are sorted by name, e.g. <code>torso.png</code>, <code>eyes_closed.png</code>, <code>arm_l_upper.png</code>. A Photoshop <code>.psd</code> works too.</span>
@@ -67,6 +69,7 @@
             <button class="tab" data-tab="actions">Actions</button>
             <button class="tab" data-tab="accessories">Accessories</button>
           </nav>
+          <div class="tab-help-row"><button class="tab-help" type="button" data-help="tab" title="What this tab is for and how it works"><span class="help-btn" aria-hidden="true">?</span>How this tab works</button></div>
           <div class="tab-body" id="tab-part"></div>
           <div class="tab-body" id="tab-motion" hidden></div>
           <div class="tab-body" id="tab-mic" hidden></div>
@@ -89,6 +92,7 @@
           <span class="chip" id="chipEyes">eyes: open</span>
         </div>
         <button id="btnTalkTest" class="btn ghost" title="Hold to fake talking (or hold Space)">Hold to test talk</button>
+        <button class="help-btn" type="button" data-help="meter" title="Help: Microphone bar" aria-label="Help: Microphone bar">?</button>
       </div>
     </section>
   </main>
@@ -104,6 +108,7 @@
 
   <script src="js/util.js"></script>
   <script src="js/defs.js"></script>
+  <script src="js/help.js"></script>
   <script src="js/placeholder.js"></script>
   <script src="js/assets.js"></script>
   <script src="js/storage.js"></script>

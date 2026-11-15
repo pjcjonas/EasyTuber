@@ -53,7 +53,11 @@
       return el('label', { class: 'check', title }, input, label);
     },
 
-    section(title, ...children) { return el('div', { class: 'section' }, title ? el('h3', {}, title) : null, ...children); },
+    // a card with a heading; the heading's "?" opens the section's help (js/help.js: every section needs a topic)
+    section(title, ...children) {
+      const head = title ? el('h3', {}, el('span', {}, title), PT.Help ? PT.Help.button(PT.Help.sectionKey(title), title) : null) : null;
+      return el('div', { class: 'section' }, head, ...children);
+    },
     note(text) { return el('p', { class: 'note' }, text); },
 
     makeDroppable(node, onFiles) {

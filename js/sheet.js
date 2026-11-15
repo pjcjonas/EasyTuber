@@ -107,17 +107,17 @@
       this.linkedInput = linked;
 
       const side = el('div', { class: 'sheet-side' },
-        el('div', { class: 'section' }, el('h3', {}, 'Split into a grid'),
+        el('div', { class: 'section' }, el('h3', {}, el('span', {}, 'Split into a grid'), PT.Help.button('section:Split into a grid')),
           el('div', { class: 'grid-row' }, el('label', {}, 'Columns'), cols, el('label', {}, 'Rows'), rows),
           el('div', { class: 'field-inline' }, el('label', {}, 'Assign in order to'), this.targetSel),
           el('button', { class: 'btn', onclick: () => { this.grid(+cols.value || 1, +rows.value || 1, this.target); this.refresh(); } }, 'Split sheet into grid'),
           el('p', { class: 'note' }, 'Equal cells keep animation frames perfectly aligned. Best for eyes and mouths.')),
-        el('div', { class: 'section' }, el('h3', {}, 'Find sprites automatically'),
+        el('div', { class: 'section' }, el('h3', {}, el('span', {}, 'Find sprites automatically'), PT.Help.button('section:Find sprites automatically')),
           el('div', { class: 'field-inline' }, el('label', {}, 'Join pieces closer than (px)'), gap),
           el('button', { class: 'btn', onclick: () => { this.autoDetect(+gap.value || 0); this.refresh(); } }, 'Detect sprites'),
           el('p', { class: 'note' }, 'Boxes each separate drawing on a transparent sheet. Raise the number if a pair of eyes gets split in two.')),
         el('div', { class: 'section' },
-          el('div', { class: 'title-row' }, el('h3', {}, 'Crop boxes'),
+          el('div', { class: 'title-row' }, el('h3', {}, el('span', {}, 'Crop boxes'), PT.Help.button('section:Crop boxes')),
             el('button', { class: 'btn small', onclick: () => { this.addBox(); this.refresh(); } }, '+ Add box')),
           el('label', { class: 'check' }, linked, 'Keep all boxes the same size (frames stay aligned)'),
           this.list),
@@ -131,6 +131,7 @@
           el('header', { class: 'modal-head' },
             el('h2', {}, 'Sprite sheet'), name,
             el('span', { class: 'part-sub' }, `${this.sheet.w} × ${this.sheet.h}px`),
+            PT.Help.button('sheet'),
             el('button', { class: 'icon-btn close', title: 'Close', onclick: () => this.close() }, '✕')),
           el('div', { class: 'modal-body' }, this.wrap, side),
           el('footer', { class: 'modal-foot' },
@@ -482,7 +483,7 @@
     },
 
     key(e) {
-      if (!this.open) return;
+      if (!this.open || (PT.Help && PT.Help.isOpen)) return;   // help is open on top: Esc closes only that
       const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
       if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); this.close(); return; }
       if (typing) { e.stopPropagation(); return; }
